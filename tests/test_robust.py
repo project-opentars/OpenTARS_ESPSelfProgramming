@@ -144,6 +144,17 @@ async def principal():
     conferir("429 sem sucesso dá uma explicação útil", err and "rate limit" in err[0] and "Settings" in err[0], err)
     conferir("o pedido que falhou não deixa chamada de ferramenta órfã", ag.history[-1]["role"] == "user" and not ag.history[-1]["content"].startswith("[auto]"), ag.history[-2:])
 
+    # 6b) cota DIÁRIA (TPD): não repete, não mexe no ritmo por minuto e explica
+    config.save({"llm_tpm": 6800})
+    corpo_dia = '{"error":{"message":"Rate limit reached for model `m` on tokens per day (TPD): Limit 200000, Used 198455, Requested 3100. Please try again in 3h12m5s. Need more tokens?"}}'
+    ROTEIRO[:] = [falha(429, corpo_dia)] * 4
+    evs = await pedido(ag, "teste")
+    err = [e["text"] for e in evs if e["kind"] == "error"]
+    conferir("cota diária (TPD): erro claro, sem repetir e sem mexer no limite por minuto",
+             err and "DAILY" in err[0] and "3h12m5s" in err[0].replace(".", "") and len(VISTO) == 1 and config.get()["llm_tpm"] == 6800, (err, len(VISTO), config.get()["llm_tpm"]))
+    conferir("learn_limit ignora o limite por dia", llm.learn_limit(corpo_dia) == 0 and llm.learn_limit("on tokens per minute (TPM): Limit 8000, Used 1") == 8000)
+    config.save({"llm_tpm": 0})
+
     # 7) tool_use_failed da Groq: repete e funciona
     ROTEIRO[:] = [falha(400, {"error": {"message": "Failed to call a function", "code": "tool_use_failed"}}), ok(texto("agora foi"))]
     evs = await pedido(ag, "teste")

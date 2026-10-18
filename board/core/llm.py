@@ -57,8 +57,16 @@ def retry_wait(headers, text, attempt):
     return int(min(MAX_WAIT_S, max(2, wait + 1)))
 
 
+def is_daily_limit(text):
+    """A cota do DIA (TPD/RPD) acabou: repetir não adianta e o ritmo por minuto não tem nada a ver com isso."""
+    t = text.lower()
+    return "per day" in t or "(tpd)" in t or "(rpd)" in t or "requests per day" in t
+
+
 def learn_limit(text):
-    """A Groq diz no 429: 'Limit 8000, Used 7000, Requested 2000'. Devolve o limite por minuto, ou 0."""
+    """A Groq diz no 429: 'tokens per minute (TPM): Limit 8000, Used 7000, Requested 2000'. Devolve o limite por minuto, ou 0."""
+    if is_daily_limit(text) or ("per minute" not in text.lower() and "(tpm)" not in text.lower()):
+        return 0
     i = text.find("Limit ")
     if i < 0:
         return 0
@@ -148,11 +156,12 @@ async def chat(cfg, messages, tools=None):
         # segunda. O código do erro vem DEPOIS da geração que falhou (longa), por isso confere o corpo inteiro e não só o começo.
         bad_call = status == 400 and ("tool_use_failed" in full or "Parsing failed" in full or "could not be parsed" in full
                                       or "Failed to call a function" in full)
-        retryable = status in RETRY_STATUS or bad_call
+        daily = status == 429 and is_daily_limit(full)
+        retryable = (status in RETRY_STATUS or bad_call) and not daily
         if status == 200 or not retryable or attempt >= MAX_RETRIES:
             break
         attempt += 1
-        if status == 429:
+        if status == 429 and not daily:
             lim = learn_limit(text)
             if lim and not cfg.get("llm_tpm"):  # aprende o limite por minuto e passa a respeitá-lo antes de enviar (salvo na configuração)
                 cfg = config.save({"llm_tpm": int(lim * 0.85)})
@@ -164,6 +173,13 @@ async def chat(cfg, messages, tools=None):
         events.emit("log", text="model busy (HTTP %d), trying again in %d s (%d/%d)" % (status, wait_s, attempt, MAX_RETRIES))
         await asyncio.sleep(wait_s * WAIT_SCALE)
     if status != 200:
+        if status == 429 and daily:
+            i = full.find("try again in ")
+            when = full[i + 13:i + 30].split(" ")[0].strip(".,") if i >= 0 else ""
+            if when and when[-1].isdigit():
+                when += "s"
+            raise LLMError("The DAILY token quota of this model is used up. It resets by itself" + (" (try again in %s)" % when if when else "") +
+                           ", or pick another model or provider in Settings (each model has its own quota). " + full[:160])
         if status == 429:
             raise LLMError("The provider's rate limit was hit (HTTP 429). Free plans limit tokens per minute: wait a minute and send again, "
                            "or pick another model or provider in Settings. " + text[:200])
