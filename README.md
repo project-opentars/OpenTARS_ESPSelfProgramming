@@ -12,6 +12,10 @@ Part of the [openTARS](https://github.com/project-opentars/openTars-lightweight-
 - **Boards talk to each other.** With ESP-NOW, boards find each other, exchange messages and run code on one another, without a router or a PC.
 - **Convenient.** Phone-friendly page (English and Portuguese), file editor, program manager with logs, start-on-power-on, safe mode.
 
+## Status
+
+Early release (0.1.0). Tested on **one** ESP32-S3 board with Gemini as the model: page, agent loop, tool calling, programs, OLED and LED all work there. **ESP-NOW has only been tested with simulated boards** (two in-memory radios), not yet between two real boards. Local models (Ollama) are untested on hardware. Expect rough edges and please open issues.
+
 ## Hardware
 
 Tested on an **ESP32-S3 with 8 MB octal PSRAM and 16 MB flash** (ESP32-S3-DevKitC-1 N16R8). PSRAM is required for the agent. Optional: an SSD1306 OLED (I2C) and the onboard RGB LED; the agent can use any sensor or module you wire, by writing the code for it.
