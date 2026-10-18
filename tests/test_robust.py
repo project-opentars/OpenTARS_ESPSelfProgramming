@@ -152,6 +152,21 @@ async def principal():
     evs = await pedido(ag, "teste")
     conferir("400 comum não é repetido", len(VISTO) == 1 and any(e["kind"] == "error" for e in evs), len(VISTO))
 
+    # 7b) o código do erro vem depois de uma geração longa (passa dos 600 primeiros caracteres): ainda assim repete
+    longo = '{"error":{"message":"Parsing failed. The model generated output that could not be parsed.","failed_generation":"' + "x" * 900 + '","code":"tool_use_failed"}}'
+    ROTEIRO[:] = [falha(400, longo), ok(texto("depois do parse falho"))]
+    evs = await pedido(ag, "teste")
+    conferir("400 'Parsing failed' com o código no fim do corpo é repetido", [e["text"] for e in evs if e["kind"] == "assistant"] == ["depois do parse falho"], [e.get("text") for e in evs][:4])
+
+    # 7c) resposta vazia: pede um resumo; se continuar vazia, mostra o último resultado
+    ROTEIRO[:] = [ok(tool_call("run_code", {"code": "print('valor 99')"})), ok(texto("")), ok(texto("Rodei e imprimiu valor 99."))]
+    evs = await pedido(ag, "teste vazio")
+    conferir("resposta vazia leva um pedido de resumo e a resposta aparece", [e["text"] for e in evs if e["kind"] == "assistant"] == ["Rodei e imprimiu valor 99."], [e.get("text") for e in evs])
+    ROTEIRO[:] = [ok(tool_call("run_code", {"code": "print('valor 77')"})), ok(texto("")), ok(texto("  ")), ok(texto(""))]
+    evs = await pedido(ag, "teste vazio de novo")
+    fin = [e["text"] for e in evs if e["kind"] == "assistant"]
+    conferir("resposta vazia insistente mostra o último resultado da ferramenta", len(fin) == 1 and "valor 77" in fin[0], fin)
+
     # 8) esperas: o texto do provedor e o cabeçalho
     conferir("espera lida do cabeçalho", llm.retry_wait({"retry-after": "12"}, "", 1) == 13)
     conferir("espera lida do texto (Groq): 7.2s", llm.retry_wait({}, '... Please try again in 7.2s. Need more tokens?', 1) == 8)
@@ -203,6 +218,13 @@ async def principal():
     conferir("o prompt informa o fuso", '"utc_offset_hours": -3.0' in ag.system_prompt(), "")
     conferir("o prompt manda rodar em vez de entregar código", "Never put a program in a reply" in ag.system_prompt())
 
+    # 12b) o padrão antigo de max_tokens (4096) é migrado
+    compat.write_text(config.PATH, json.dumps({"llm_max_tokens": 4096, "llm_model": "x"}))
+    c = config.load()
+    conferir("config antiga com max_tokens 4096 migra para o padrão novo", c["llm_max_tokens"] == 1500 and json.loads(compat.read_text(config.PATH))["llm_max_tokens"] == 1500, c["llm_max_tokens"])
+    compat.write_text(config.PATH, json.dumps({"llm_base_url": "http://127.0.0.1:%d/v1" % porta, "llm_model": "fake", "llm_preset": "custom"}))
+    config.load()
+
     # 13) histórico salvo com chamada de ferramenta sem resposta (queda no meio do pedido) é consertado ao ligar
     compat.write_text(agent_mod.HISTORY, json.dumps([{"role": "user", "content": "oi"}, tool_call("run_code", {"code": "x"})]))
     ag3 = agent_mod.Agent()
@@ -236,7 +258,7 @@ async def principal():
                   ok(texto("passou"))]
     evs = await pedido(ag, "teste de cota")
     conferir("o limite por minuto é aprendido do texto do 429 (85 %)", config.get()["llm_tpm"] == 6800, config.get()["llm_tpm"])
-    llm._used[:] = [(compat.ticks_ms() - 5000, 6000)]   # já gastou 6000 tokens há 5 s
+    llm._used[:] = [(compat.ticks_ms() - 5000, 6700)]   # já gastou 6700 tokens há 5 s
     ROTEIRO[:] = [ok(texto("depois da espera"))]
     evs = await pedido(ag, "outro teste")
     conferir("antes de passar da cota ele espera (e avisa)", any("waiting" in str(e.get("text")) and "token limit" in str(e.get("text")) for e in evs), [e.get("text") for e in evs])
@@ -244,6 +266,11 @@ async def principal():
     ROTEIRO[:] = [ok(texto("sem espera"))]
     evs = await pedido(ag, "mais um")
     conferir("com a cota livre não espera", not any("waiting" in str(e.get("text")) for e in evs), [e.get("text") for e in evs])
+    # um 429 mesmo se segurando baixa o limite aprendido em 10 %
+    config.save({"llm_tpm": 6800})
+    ROTEIRO[:] = [falha(429, '{"error":{"message":"Limit 8000, Used 7900, Requested 500. Please try again in 1s."}}'), ok(texto("ok"))]
+    await pedido(ag, "teste")
+    conferir("429 mesmo com ritmo baixa o limite em 10 %", config.get()["llm_tpm"] == 6120, config.get()["llm_tpm"])
     config.save({"llm_tpm": 0})
 
     srv.close()

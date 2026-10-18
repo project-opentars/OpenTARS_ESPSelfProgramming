@@ -38,6 +38,9 @@ def load():
             data = {}
     cfg = dict(DEFAULTS)
     cfg.update(data)
+    if data.get("llm_max_tokens") == 4096:  # o padrão antigo (0.1.0): pesava na cota por minuto dos planos grátis
+        cfg["llm_max_tokens"] = DEFAULTS["llm_max_tokens"]
+        compat.write_text(PATH, json.dumps(cfg))
     _cfg = cfg
     return cfg
 

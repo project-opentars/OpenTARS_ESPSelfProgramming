@@ -54,8 +54,8 @@ Every board announces itself every 10 s. Boards on your Wi-Fi use the router's c
 
 ## Troubleshooting
 
-- **HTTP 429 (rate limit).** Free plans (Groq, Gemini) limit tokens per minute, and every tool round resends the conversation. The board waits for the time the provider asks (`Retry-After`) and retries up to three times; if it still fails, wait a minute or pick a larger plan or another model.
-- **A small model pastes code instead of running it.** The agent notices a code block without any tool call and asks the model to run it (twice at most). If a model keeps doing it, pick a larger one (for example `gpt-oss-120b` instead of `gpt-oss-20b`).
+- **HTTP 429 (rate limit) and slow answers on free plans.** Free plans (Groq, Gemini) limit tokens per minute, and every tool round resends the conversation. The board **learns the provider's limit** from the first 429 (saved as *tokens per minute* in Settings), spaces its requests to stay under it, honours `Retry-After`, retries up to three times and keeps replies short (*max reply tokens*, 1500 by default, because some providers count it against your quota). The price is time: with ~8,000 tokens per minute an agent loop of 7 rounds takes a few minutes. A larger plan, or a provider without such a tight limit, makes it much faster.
+- **A small model pastes code instead of running it, or answers with nothing.** The agent notices a code block without any tool call and asks the model to run it, asks for a summary after an empty answer (twice at most each) and retries malformed tool calls (`tool_use_failed`). If a model keeps failing, pick a larger one (for example `gpt-oss-120b` instead of `gpt-oss-20b`). "stop" and "pare tudo" never reach the model: the board stops every program by itself.
 - **Wrong time.** The clock is synced by NTP at boot and is UTC. Set your time zone in **Settings** (UTC offset in hours) or just tell the agent where you live.
 - **Opening the USB serial port restarts the board** (ESP32-S3 native USB). That is normal; the page shows the boot reason in `/api/status` and the last 30 boots are in `/data/boot.log`.
 

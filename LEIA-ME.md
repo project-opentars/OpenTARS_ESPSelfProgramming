@@ -15,4 +15,6 @@ Para o Ollama do PC: ele precisa escutar na rede (`OLLAMA_HOST=0.0.0.0`) e o end
 
 **Sem senha:** qualquer pessoa no mesmo Wi-Fi pode abrir a página e rodar código na placa. Segure o BOOT ao ligar para o modo seguro (não roda os programas automáticos).
 
-Testes: `python3 tests/test_core.py` (no PC) e `mpremote connect /dev/ttyACM0 run tests/smoke_board.py` (na placa). Detalhes no `README.md`.
+Em planos grátis (Groq, Gemini) o limite de tokens por minuto deixa o agente lento: a placa aprende o limite sozinha e se segura, mas um pedido de 7 rodadas leva alguns minutos. "Pare" e "stop" param tudo sem chamar o modelo.
+
+Testes: `python3 tests/test_robust.py` (modelos fracos, cotas, relógio) e `python3 tests/test_core.py` (no PC) e `mpremote connect /dev/ttyACM0 run tests/smoke_board.py` (na placa). Detalhes no `README.md`.

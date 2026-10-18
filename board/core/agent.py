@@ -37,6 +37,18 @@ CODE_NUDGE = (AUTO + "You answered with code but did not run it. The user cannot
               "(Only if the user asked to SEE the code, answer with it and say you did not run it.)")
 
 
+EMPTY_NUDGE = (AUTO + "Your last reply was empty. Tell the user in one or two sentences what you did and what the result was "
+               "(use the tool results above).")
+
+
+def _fallback_summary(history):
+    """Se o modelo insiste em responder vazio, a página ainda diz algo útil: o último resultado de ferramenta."""
+    for m in reversed(history):
+        if m.get("role") == "tool" and m.get("content"):
+            return "(The model sent no final answer.) Last result: " + str(m["content"])[:300]
+    return "(The model sent no final answer.)"
+
+
 def _looks_like_code_dump(text):
     t = text or ""
     if "```" not in t:
@@ -198,8 +210,16 @@ class Agent:
                         self.history.append({"role": "user", "content": CODE_NUDGE})
                         events.emit("log", text="the model answered with code instead of running it: asking it to run it")
                         continue
-                    if msg.get("content"):
-                        events.emit("assistant", text=msg["content"])
+                    if not (msg.get("content") or "").strip():
+                        # resposta vazia (o modelo "pensou" e não disse nada): pede um resumo; se insistir, a página mostra o último resultado
+                        if nudges < MAX_NUDGES:
+                            nudges += 1
+                            self.history.append({"role": "user", "content": EMPTY_NUDGE})
+                            events.emit("log", text="the model sent an empty answer: asking for a summary")
+                            continue
+                        events.emit("assistant", text=_fallback_summary(self.history))
+                        break
+                    events.emit("assistant", text=msg["content"])
                     break
                 if msg.get("content"):
                     events.emit("assistant", text=msg["content"])

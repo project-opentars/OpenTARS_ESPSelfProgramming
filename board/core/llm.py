@@ -86,7 +86,7 @@ def _pace_wait(limit, need):
         i += 1
     if i == 0:
         return 0
-    return min(50, max(1, (60000 - compat.ticks_diff(now, _used[i - 1][0])) // 1000 + 1))
+    return min(30, max(1, (60000 - compat.ticks_diff(now, _used[i - 1][0])) // 1000 + 1))
 
 
 def _headers(cfg):
@@ -134,7 +134,7 @@ async def chat(cfg, messages, tools=None):
     attempt = 0
     from . import compat, config, events
     import asyncio
-    need = len(payload) // 3 + body["max_tokens"]   # estimativa "pedida" (prompt + teto da resposta), como a Groq conta
+    need = len(payload) // 3 + min(body["max_tokens"], 350)   # prompt + uma resposta típica (a resposta real quase nunca chega ao teto)
     wait = _pace_wait(cfg.get("llm_tpm", 0), need)
     if wait:
         events.emit("log", text="model busy: waiting %d s to stay under the provider's token limit" % wait)
@@ -142,17 +142,24 @@ async def chat(cfg, messages, tools=None):
     while True:
         status, rh, data = await http_client.request("POST", base + "/chat/completions", _headers(cfg), payload,
                                                      cfg.get("llm_timeout_s", 120))
-        text = data[:600].decode("utf-8", "replace") if data else ""
-        # tool_use_failed: o modelo (gpt-oss na Groq, por exemplo) montou a chamada de ferramenta torta; costuma acertar na segunda
-        retryable = status in RETRY_STATUS or (status == 400 and "tool_use_failed" in text)
+        full = data.decode("utf-8", "replace") if data else ""
+        text = full[:600]
+        # tool_use_failed / "Parsing failed": o modelo (gpt-oss na Groq, por exemplo) montou a chamada de ferramenta torta; costuma acertar na
+        # segunda. O código do erro vem DEPOIS da geração que falhou (longa), por isso confere o corpo inteiro e não só o começo.
+        bad_call = status == 400 and ("tool_use_failed" in full or "Parsing failed" in full or "could not be parsed" in full
+                                      or "Failed to call a function" in full)
+        retryable = status in RETRY_STATUS or bad_call
         if status == 200 or not retryable or attempt >= MAX_RETRIES:
             break
         attempt += 1
-        if status == 429 and not cfg.get("llm_tpm"):
+        if status == 429:
             lim = learn_limit(text)
-            if lim:  # aprende o limite por minuto e passa a respeitá-lo antes de enviar (salvo na configuração)
+            if lim and not cfg.get("llm_tpm"):  # aprende o limite por minuto e passa a respeitá-lo antes de enviar (salvo na configuração)
                 cfg = config.save({"llm_tpm": int(lim * 0.85)})
                 events.emit("log", text="provider limit learned: %d tokens per minute" % lim)
+            elif cfg.get("llm_tpm", 0) > 2500:  # estourou mesmo se segurando: o limite real é menor que o aprendido, baixa 10 %
+                cfg = config.save({"llm_tpm": int(cfg["llm_tpm"] * 0.9)})
+                events.emit("log", text="still over the limit: now keeping to %d tokens per minute" % cfg["llm_tpm"])
         wait_s = retry_wait(rh, text, attempt)
         events.emit("log", text="model busy (HTTP %d), trying again in %d s (%d/%d)" % (status, wait_s, attempt, MAX_RETRIES))
         await asyncio.sleep(wait_s * WAIT_SCALE)
