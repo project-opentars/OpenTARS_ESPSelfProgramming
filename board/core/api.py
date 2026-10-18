@@ -6,6 +6,7 @@ from . import agent as agent_mod, compat, config, events, llm, net, programs, to
 from .web import Server, reply
 
 VERSION = "0.1.0"
+BOOT_CAUSE = ""
 
 
 def make_server():
@@ -14,7 +15,8 @@ def make_server():
 
     @srv.route("GET", "/api/status")
     async def status(req):
-        return reply({"version": VERSION, "network": net.status(), "memory": compat.mem_info(), "busy": ag.busy,
+        return reply({"version": VERSION, "uptime_s": compat.ticks_ms() // 1000, "boot_cause": BOOT_CAUSE,
+                      "network": net.status(), "memory": compat.mem_info(), "busy": ag.busy,
                       "programs": programs.all_info(), "peers": net.peers_info(), "last_event": events.last_id()})
 
     @srv.route("GET", "/api/events")

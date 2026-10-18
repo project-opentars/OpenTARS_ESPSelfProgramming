@@ -84,9 +84,9 @@ def _run(prog):
         if prog.stop_flag:
             prog.status = "stopped"
         else:
-            prog.status = "error"
             prog.error = compat.format_exc(e)
             prog.write(prog.error)
+            prog.status = "error"  # só depois de gravar: quem espera o fim (run_code) lê a saída já com o traceback
     prog.ended = compat.ticks_ms()
     events.emit("program", name=prog.name, status=prog.status, error=prog.error[-600:])
 

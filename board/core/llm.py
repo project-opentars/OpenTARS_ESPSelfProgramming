@@ -13,6 +13,10 @@ PRESETS = {
 }
 
 
+RETRY_STATUS = (429, 500, 502, 503, 504)
+RETRY_WAITS = (3, 8)   # duas novas tentativas, com espera crescente
+
+
 class LLMError(Exception):
     pass
 
@@ -55,8 +59,17 @@ async def chat(cfg, messages, tools=None):
     body = {"model": cfg["llm_model"], "messages": clean_messages(messages, base), "max_tokens": cfg.get("llm_max_tokens", 4096)}
     if tools:
         body["tools"] = tools
-    status, _, data = await http_client.request("POST", base + "/chat/completions", _headers(cfg), json.dumps(body),
-                                                cfg.get("llm_timeout_s", 120))
+    payload = json.dumps(body)
+    for wait_s in RETRY_WAITS + (None,):
+        status, _, data = await http_client.request("POST", base + "/chat/completions", _headers(cfg), payload,
+                                                    cfg.get("llm_timeout_s", 120))
+        if status not in RETRY_STATUS or wait_s is None:
+            break
+        # sobrecarga ou limite temporário do provedor (ex.: Gemini 503 "high demand"): espera e tenta de novo
+        from . import events
+        events.emit("log", text="model busy (HTTP %d), trying again in %d s" % (status, wait_s))
+        import asyncio
+        await asyncio.sleep(wait_s)
     if status != 200:
         raise LLMError("HTTP %d: %s" % (status, data[:400].decode("utf-8", "replace") if data else ""))
     try:

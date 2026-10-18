@@ -7,7 +7,22 @@ import sys
 sys.path.append("/lib")
 sys.path.append("/skills")
 
-from core import api, config, events, hw, net, programs
+from core import api, compat, config, events, hw, net, programs
+
+CAUSES = {1: "power-on", 2: "hard reset or crash", 3: "watchdog", 4: "deep sleep", 5: "soft reset"}
+
+
+def _log_boot():
+    """Guarda o motivo de cada reinício em /data/boot.log (últimas 30 linhas): ajuda a achar travamentos."""
+    try:
+        import machine
+        cause = CAUSES.get(machine.reset_cause(), str(machine.reset_cause()))
+    except Exception:
+        cause = "unknown"
+    old = (compat.read_text("/data/boot.log", "") or "").splitlines()[-29:]
+    compat.write_text("/data/boot.log", "\n".join(old + ["boot #%d: %s" % (len(old) + 1, cause)]) + "\n")
+    api.BOOT_CAUSE = cause
+    events.emit("log", text="boot: " + cause)
 
 
 def _safe_mode():
@@ -20,6 +35,7 @@ def _safe_mode():
 
 async def main():
     cfg = config.load()
+    _log_boot()
     safe = _safe_mode()
     hw.led(0, 0, 40)
     await net.start()
