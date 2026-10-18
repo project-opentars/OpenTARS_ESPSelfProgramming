@@ -1,5 +1,7 @@
 # openTARS Self-Programming
 
+> A simple lightweight ESP32 firmware that makes local and cloud AI models program your microcontroller natively. Ask for a code, and get it ready in seconds, already running on your board.
+
 An AI agent that **lives inside a microcontroller** and programs it from your phone. You open the board's page, ask for something ("make the LED breathe", "show a spinning cube on the screen", "when the button on the kitchen board is pressed, beep here"), and the agent writes MicroPython, runs it on the board, reads the errors, fixes them and keeps what works as its own library.
 
 Part of the [openTARS](https://github.com/project-opentars/openTars-lightweight-local-addon) family, with the same look and KIPP, the mascot.
