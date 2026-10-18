@@ -27,7 +27,7 @@ const I18N = {
     thinking: "thinking…", working: "running tools…", busy: "The board is still working on the last request.",
     no_programs: "No programs yet. Ask the board to make one.", log: "Log", run_again: "Run again", autostart: "Start on power-on",
     no_peers: "No other boards seen yet.", open_page: "Open its page", seen: "seen %s s ago", empty_folder: "Empty folder",
-    saved: "Saved.", saved_reboot: "Saved. Restart the board to use the new Wi-Fi.", confirm_delete: "Delete %s?",
+    saved: "Saved.", saved_reboot: "Saved. Restart the board: it will leave this network and join %s. Then put your phone back on %s and open http://%s.local (or the IP shown on the board's screen).", confirm_delete: "Delete %s?",
     confirm_reboot: "Restart the board now?", confirm_clear: "Erase the conversation history on the board?", restarting: "Restarting…",
     new_file_name: "File name (in %s):", key_kept: "leave empty to keep the saved key", models_found: "%s models", own_network: "own Wi-Fi",
     wifi: "Wi-Fi", free: "free", keep_ssid: "(keep current)", stopped_msg: "Stopped.", result: "Result", mode: "Mode", ip: "IP",
@@ -53,7 +53,7 @@ const I18N = {
     thinking: "pensando…", working: "usando ferramentas…", busy: "A placa ainda está trabalhando no pedido anterior.",
     no_programs: "Nenhum programa ainda. Peça para a placa criar um.", log: "Saída", run_again: "Rodar de novo", autostart: "Iniciar ao ligar",
     no_peers: "Nenhuma outra placa encontrada ainda.", open_page: "Abrir a página dela", seen: "vista há %s s", empty_folder: "Pasta vazia",
-    saved: "Salvo.", saved_reboot: "Salvo. Reinicie a placa para usar o novo Wi-Fi.", confirm_delete: "Apagar %s?",
+    saved: "Salvo.", saved_reboot: "Salvo. Reinicie a placa: ela sai desta rede e entra na %s. Depois volte o celular para a %s e abra http://%s.local (ou o IP que aparece na tela da placa).", confirm_delete: "Apagar %s?",
     confirm_reboot: "Reiniciar a placa agora?", confirm_clear: "Apagar o histórico da conversa na placa?", restarting: "Reiniciando…",
     new_file_name: "Nome do arquivo (em %s):", key_kept: "deixe vazio para manter a chave salva", models_found: "%s modelos", own_network: "Wi-Fi próprio",
     wifi: "Wi-Fi", free: "livre", keep_ssid: "(manter o atual)", stopped_msg: "Parado.", result: "Resultado", mode: "Modo", ip: "IP",
@@ -530,7 +530,8 @@ async function saveSettings(quiet) {
   if ($("#wifi-pass").value) body.wifi_password = $("#wifi-pass").value;
   const r = await api("/api/config", { method: "POST", body });
   cfg = r.config;
-  if (!quiet) $("#save-msg").textContent = newWifi || $("#wifi-pass").value ? t("saved_reboot") : t("saved");
+  const ssid = newWifi || cfg.wifi_ssid, host = cfg.name || boardName;
+  if (!quiet) $("#save-msg").textContent = newWifi || $("#wifi-pass").value ? t("saved_reboot", ssid, ssid, host) : t("saved");
   $("#api-key").value = "";
   $("#api-key").placeholder = cfg.llm_api_key ? cfg.llm_api_key + " · " + t("key_kept") : "";
 }
@@ -546,10 +547,12 @@ $("#clear-chat").addEventListener("click", async () => {
 });
 
 // ---------------- cabeçalho e início ----------------
+let boardName = "opentars";
 async function refreshStatus() {
   try {
     const s = await api("/api/status");
     const n = s.network;
+    boardName = n.name || boardName;
     $("#board-line").textContent = [n.name, n.ip, n.mode === "ap" ? t("own_network") : n.ssid, s.memory.free ? Math.round(s.memory.free / 1024) + " KB " + t("free") : ""]
       .filter(Boolean).join(" · ");
   } catch (e) { /* o laço de eventos cuida da faixa */ }
