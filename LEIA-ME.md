@@ -1,20 +1,12 @@
 # openTARS Self-Programming (resumo em português)
 
-Um agente de IA que **mora dentro da placa** (ESP32-S3 com MicroPython) e se programa sozinho: você abre a página da placa no celular, pede algo, e ele escreve o código, roda, lê o erro, corrige e guarda o que funciona na própria biblioteca (`/skills`). Usa modelos na nuvem (Gemini, OpenAI, Groq, OpenRouter) ou locais (Ollama/LM Studio no seu PC), e as placas conversam entre si por ESP-NOW, sem PC.
-
-**Estado:** versão inicial (0.1.0), testada em **uma** placa ESP32-S3 com o Gemini. O ESP-NOW só foi testado com placas simuladas (ainda não entre duas placas reais) e os modelos locais (Ollama) ainda não foram testados no hardware.
+Você abre a página da placa no celular e pede algo ("faça o LED respirar"). Uma **ponte** de um arquivo só, no seu computador, entrega o pedido ao programa de IA que você já usa (**Claude Code, Codex, OpenCode, Pi, Grok Build**), que escreve o código MicroPython e roda na placa. Sem chave de API e sem configurar modelo: vale o que esses programas já têm.
 
 ## Começar
-1. Baixe o MicroPython `ESP32_GENERIC_S3` variante **SPIRAM_OCT** em micropython.org para `firmware/`.
-2. `tools/flash.sh /dev/ttyACM0` (apaga a placa).
-3. `pip install mpremote` e `tools/deploy.sh /dev/ttyACM0`.
-4. No celular, entre na rede aberta **opentars-xxxx** e abra **http://192.168.71.1**.
-5. Em **Ajustes**: escolha o Wi-Fi, o provedor do modelo e a chave; reinicie a placa.
+1. `tools/flash.sh /dev/ttyACM0` (grava o MicroPython e **apaga** a placa) e `pip install mpremote` + `tools/deploy.sh /dev/ttyACM0`.
+2. No celular, entre na rede aberta **opentars-xxxx**, abra **http://192.168.71.1**, em **Ajustes > Wi-Fi** escolha a sua rede e conecte. Volte o celular para o seu Wi-Fi e abra o endereço novo.
+3. A página mostra um comando: cole-o num terminal **no computador que tem o programa de IA instalado e logado** e deixe aberto. Depois é só `python3 bridge.py`.
 
-Para o Ollama do PC: ele precisa escutar na rede (`OLLAMA_HOST=0.0.0.0`) e o endereço em Ajustes é `http://<IP do PC>:11434/v1`.
+**Estado:** testado em uma placa ESP32-S3 com Claude Code, Codex, OpenCode e Grok Build (ponta a ponta). O Pi não estava logado na máquina de teste. Ollama não é suportado (só responde texto). ESP-NOW só testado com placas simuladas. A ponte só foi testada no Linux.
 
-**Sem senha:** qualquer pessoa no mesmo Wi-Fi pode abrir a página e rodar código na placa. Segure o BOOT ao ligar para o modo seguro (não roda os programas automáticos).
-
-Em planos grátis (Groq, Gemini) o limite de tokens por minuto deixa o agente lento: a placa aprende o limite sozinha e se segura, mas um pedido de 7 rodadas leva alguns minutos. "Pare" e "stop" param tudo sem chamar o modelo.
-
-Testes: `python3 tests/test_robust.py` (modelos fracos, cotas, relógio) e `python3 tests/test_core.py` (no PC) e `mpremote connect /dev/ttyACM0 run tests/smoke_board.py` (na placa). Detalhes no `README.md`.
+**Sem senha:** qualquer um no mesmo Wi-Fi roda código na placa. Os programas de IA rodam com permissões liberadas para executar os comandos da placa (numa pasta temporária vazia). Detalhes no `README.md`.

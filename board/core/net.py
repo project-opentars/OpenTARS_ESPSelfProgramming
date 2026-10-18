@@ -10,7 +10,8 @@ CHUNK = 240
 BCAST = b"\xff" * 6
 AP_IP = "192.168.71.1"   # longe do 192.168.4.x, que é a faixa de muitos roteadores (e do AP padrão do ESP32)
 
-_st = {"mode": "offline", "ip": "", "ssid": "", "channel": None, "name": "", "mac": "", "rssi": None}
+_st = {"mode": "offline", "ip": "", "ssid": "", "channel": None, "name": "", "mac": "", "rssi": None, "wifi_error": "", "ap_ip": ""}
+AP_KEEP_S = 180          # depois de conectar pelo assistente, a rede própria fica no ar 3 min para a página mostrar o endereço novo
 _wlan = None
 _esp = None
 _peers = {}        # mac(bytes) -> {"name", "mac", "rssi", "seen", "ip"}
@@ -78,18 +79,12 @@ async def start_wifi():
                 break
             await asyncio.sleep(0.5)
     if sta.isconnected():
-        try:
-            sta.config(pm=sta.PM_NONE)  # sem economia de energia: o ESP-NOW precisa ouvir o tempo todo
-        except Exception:
-            pass
-        _st.update({"mode": "sta", "ip": sta.ifconfig()[0], "ssid": cfg["wifi_ssid"], "channel": sta.config("channel")})
-        try:
-            _st["rssi"] = sta.status("rssi")
-        except Exception:
-            pass
+        _connected(sta, cfg["wifi_ssid"])
         return
     # sem Wi-Fi: rede própria, aberta, para configurar pelo celular (e o ESP-NOW segue no canal escolhido)
     if cfg.get("wifi_ssid"):
+        _st["wifi_error"] = _reason(sta)
+        events.emit("log", text="Wi-Fi %s failed: %s" % (cfg["wifi_ssid"], _st["wifi_error"]))
         sta.disconnect()
     ch = int(cfg.get("espnow_channel") or 1)
     ap = network.WLAN(network.AP_IF)
@@ -102,7 +97,101 @@ async def start_wifi():
         ap.ifconfig((AP_IP, "255.255.255.0", AP_IP, AP_IP))
     except Exception:
         pass
-    _st.update({"mode": "ap", "ip": ap.ifconfig()[0], "ssid": _st["name"], "channel": ch})
+    _st.update({"mode": "ap", "ip": ap.ifconfig()[0], "ssid": _st["name"], "channel": ch, "ap_ip": ap.ifconfig()[0]})
+
+
+def _connected(sta, ssid):
+    try:
+        sta.config(pm=sta.PM_NONE)  # sem economia de energia: o ESP-NOW precisa ouvir o tempo todo
+    except Exception:
+        pass
+    _st.update({"mode": "sta", "ip": sta.ifconfig()[0], "ssid": ssid, "channel": sta.config("channel"), "wifi_error": ""})
+    try:
+        _st["rssi"] = sta.status("rssi")
+    except Exception:
+        pass
+
+
+def _reason(sta):
+    """Por que o Wi-Fi não conectou, numa palavra que a página traduz."""
+    try:
+        import network
+        st = sta.status()
+        if st == getattr(network, "STAT_WRONG_PASSWORD", -1):
+            return "wrong_password"
+        if st == getattr(network, "STAT_NO_AP_FOUND", -2):
+            return "not_found"
+    except Exception:
+        pass
+    return "failed"
+
+
+async def connect_wifi(ssid, password, timeout_s=25):
+    """Conecta ao Wi-Fi da casa SEM derrubar a rede própria (o celular continua conectado a ela e vê o resultado).
+    Só salva na configuração se der certo. Devolve {ok, ip, name, error}."""
+    if not _wlan:
+        return {"ok": False, "error": "no_wifi_hardware"}
+    sta = _wlan
+    try:
+        sta.disconnect()
+    except Exception:
+        pass
+    sta.connect(ssid, password)
+    for _ in range(timeout_s * 2):
+        if sta.isconnected():
+            break
+        await asyncio.sleep(0.5)
+    if not sta.isconnected():
+        reason = _reason(sta)
+        try:
+            sta.disconnect()
+        except Exception:
+            pass
+        return {"ok": False, "error": reason}
+    config.save({"wifi_ssid": ssid, "wifi_password": password})
+    was_ap = _st["mode"] == "ap"
+    ap_ip = _st.get("ap_ip") or ""
+    _connected(sta, ssid)
+    _st["ap_ip"] = ap_ip
+    events.emit("log", text="connected to Wi-Fi %s: http://%s" % (ssid, _st["ip"]))
+    if was_ap:
+        asyncio.create_task(_close_ap_later())
+    return {"ok": True, "ip": _st["ip"], "name": _st["name"], "channel": _st["channel"]}
+
+
+async def _close_ap_later():
+    await asyncio.sleep(AP_KEEP_S)
+    try:
+        import network
+        network.WLAN(network.AP_IF).active(False)
+        _st["ap_ip"] = ""
+        events.emit("log", text="own Wi-Fi network closed: the board is on %s now" % _st["ssid"])
+    except Exception:
+        pass
+
+
+async def wifi_watchdog():
+    """Se o Wi-Fi da casa cair (roteador reiniciou), reconecta sozinho. Sem isso a placa ficaria fora da rede até alguém religá-la."""
+    lost_at = None
+    while True:
+        await asyncio.sleep(10)
+        cfg = config.get()
+        if not _wlan or not cfg.get("wifi_ssid") or _st["mode"] != "sta":
+            continue
+        try:
+            if _wlan.isconnected():
+                if lost_at is not None:
+                    _connected(_wlan, cfg["wifi_ssid"])
+                    events.emit("log", text="Wi-Fi back: http://%s" % _st["ip"])
+                    lost_at = None
+                continue
+            if lost_at is None:
+                lost_at = compat.ticks_ms()
+                events.emit("log", text="Wi-Fi lost, reconnecting")
+            _wlan.disconnect()
+            _wlan.connect(cfg["wifi_ssid"], cfg.get("wifi_password", ""))
+        except Exception as e:
+            events.emit("log", text="Wi-Fi reconnect error: %s" % e)
 
 
 def scan_wifi():
@@ -357,3 +446,4 @@ async def start():
     start_espnow()
     asyncio.create_task(rx_loop())
     asyncio.create_task(hello_loop())
+    asyncio.create_task(wifi_watchdog())

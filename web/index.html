@@ -30,6 +30,10 @@
 </nav>
 
 <div id="offline" class="banner" hidden data-i18n="offline">Board not answering. Retrying…</div>
+<div id="need-ai" class="banner need" hidden>
+  <div id="need-text"></div>
+  <div class="copy-row"><code id="cmd"></code> <button type="button" id="copy-cmd" class="primary small-btn" data-i18n="copy">Copy</button></div>
+</div>
 
 <main id="main" tabindex="-1">
   <!-- CHAT -->
@@ -117,58 +121,39 @@
   <!-- SETTINGS -->
   <section id="view-settings" class="view" hidden>
     <form id="settings" class="stack">
-      <h2 data-i18n="model">Model</h2>
-      <label for="preset" data-i18n="provider">Provider</label>
-      <select id="preset">
-        <option value="ollama">Ollama (local)</option>
-        <option value="lmstudio">LM Studio (local)</option>
-        <option value="gemini">Google Gemini</option>
-        <option value="openai">OpenAI</option>
-        <option value="groq">Groq</option>
-        <option value="openrouter">OpenRouter</option>
-        <option value="custom" data-i18n="custom">Other (OpenAI-compatible)</option>
-      </select>
-      <p id="local-hint" class="muted small" hidden data-i18n="ollama_hint">The model runs on your computer. Ollama must accept connections from the network (OLLAMA_HOST=0.0.0.0) and the address below must use your computer's IP.</p>
-      <label for="base-url" data-i18n="base_url">Address</label>
-      <input id="base-url" type="url" autocomplete="off" spellcheck="false">
-      <label for="api-key" data-i18n="api_key">API key</label>
-      <input id="api-key" type="password" autocomplete="off" spellcheck="false">
-      <label for="model" data-i18n="model_name">Model name</label>
-      <div class="row">
-        <input id="model" list="model-options" autocomplete="off" spellcheck="false">
-        <button type="button" id="load-models" class="ghost" data-i18n="load_models">List models</button>
-      </div>
-      <datalist id="model-options"></datalist>
-      <p id="models-msg" class="muted small" hidden></p>
-      <label for="tpm" data-i18n="tpm">Provider limit, tokens per minute (0 = unknown; it learns it from a 429)</label>
-      <input id="tpm" type="number" min="0" step="500">
-      <label for="max-tokens" data-i18n="max_tokens">Max reply tokens (lower is kinder to free plans)</label>
-      <input id="max-tokens" type="number" min="256" max="8192" step="100">
+      <h2 data-i18n="computer">Computer</h2>
+      <div class="card"><strong id="bridge-now">—</strong><div class="muted small" id="bridge-hint"></div></div>
+      <label for="harness" data-i18n="harness">AI program</label>
+      <select id="harness"></select>
+      <label for="harness-model" data-i18n="harness_model">Model (optional)</label>
+      <input id="harness-model" autocomplete="off" spellcheck="false" placeholder="">
 
       <h2>Wi-Fi</h2>
-      <div class="row">
-        <select id="wifi-ssid" aria-label="Wi-Fi network"></select>
-        <button type="button" id="scan" class="ghost" data-i18n="scan">Scan</button>
-      </div>
+      <div class="card"><strong id="wifi-now">—</strong><div class="muted small" id="wifi-now-ip"></div></div>
+      <label for="wifi-ssid" data-i18n="wifi_network">Network</label>
+      <div class="row"><select id="wifi-ssid"></select><button type="button" id="wifi-scan" class="ghost" data-i18n="scan">Scan</button></div>
       <label for="wifi-pass" data-i18n="password">Password</label>
       <input id="wifi-pass" type="password" autocomplete="off">
+      <div class="row"><button type="button" id="wifi-go" data-i18n="wifi_connect">Connect</button><span id="wifi-msg" class="muted small" role="status"></span></div>
 
-      <h2 data-i18n="board">Board</h2>
-      <label for="board-name" data-i18n="board_name">Name on the network</label>
-      <input id="board-name" autocomplete="off" spellcheck="false" placeholder="opentars-xxxx">
-      <label for="channel" data-i18n="channel">ESP-NOW channel when there is no Wi-Fi</label>
-      <input id="channel" type="number" min="1" max="13">
-      <fieldset class="grid3">
-        <legend data-i18n="oled_pins">OLED screen (I2C)</legend>
-        <label>SDA <input id="oled-sda" type="number" min="0" max="48"></label>
-        <label>SCL <input id="oled-scl" type="number" min="0" max="48"></label>
-        <label data-i18n-label="addr">Addr <input id="oled-addr" type="number" min="8" max="119"></label>
-      </fieldset>
-      <label for="tz" data-i18n="tz">Time zone (hours from UTC, e.g. -3 for São Paulo)</label>
-      <input id="tz" type="number" min="-12" max="14" step="0.5">
-      <label for="rgb-pin" data-i18n="rgb_pin">Onboard RGB LED pin</label>
-      <input id="rgb-pin" type="number" min="0" max="48">
-
+      <details class="manual">
+        <summary data-i18n="advanced">Board and hardware (advanced)</summary>
+        <label for="board-name" data-i18n="board_name">Name on the network</label>
+        <input id="board-name" autocomplete="off" spellcheck="false" placeholder="opentars-xxxx">
+        <label for="tz" data-i18n="tz">Time zone (hours from UTC)</label>
+        <input id="tz" type="number" min="-12" max="14" step="0.5">
+        <label for="channel" data-i18n="channel">ESP-NOW channel when there is no Wi-Fi</label>
+        <input id="channel" type="number" min="1" max="13">
+        <fieldset class="grid3">
+          <legend data-i18n="oled_pins">OLED screen (I2C)</legend>
+          <label>SDA <input id="oled-sda" type="number" min="0" max="48"></label>
+          <label>SCL <input id="oled-scl" type="number" min="0" max="48"></label>
+          <label>Addr <input id="oled-addr" type="number" min="8" max="119"></label>
+        </fieldset>
+        <label for="rgb-pin" data-i18n="rgb_pin">Onboard RGB LED pin</label>
+        <input id="rgb-pin" type="number" min="0" max="48">
+        <label class="check"><input id="devmode" type="checkbox"> <span data-i18n="devmode">Developer mode: allow editing system files</span></label>
+      </details>
       <div class="row sticky-save">
         <button type="submit" class="primary" data-i18n="save">Save</button>
         <span id="save-msg" class="muted small" role="status"></span>

@@ -40,6 +40,7 @@ def main():
             else:
                 shutil.copy(src, dst)
                 total += os.path.getsize(dst)
+    shutil.copy(os.path.join(ROOT, "pc", "bridge.py"), os.path.join(DST, "bridge.py"))  # a placa entrega a ponte: curl http://<placa>/bridge.py
     print("board/www: %.1f KB" % (total / 1024))
 
 

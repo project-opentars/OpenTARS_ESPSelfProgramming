@@ -62,6 +62,24 @@ const I18N = {
     name: "Nome", mac: "MAC", chan: "Canal", version: "Versão", running: "rodando", done: "terminou", error: "erro", stopped: "parado", starting: "iniciando",
   },
 };
+Object.assign(I18N.en, {
+  advanced: "Board and hardware (advanced)", devmode: "Developer mode: allow editing system files", copy: "Copy", copied: "Copied",
+  readonly_sys: "System file (read-only). Turn on developer mode in Settings to edit it.", tech_details: "Technical details",
+  computer: "Computer", harness: "AI program", harness_model: "Model (optional)", auto_pick: "Automatic",
+  bridge_off: "No computer connected", bridge_on: "Connected", bridge_hint: "On the computer that has an AI program installed (claude, codex, opencode, pi or grok), open a terminal and paste:",
+  wifi_first: "First put the board on your Wi-Fi: Settings, Wi-Fi. Then come back here.", wifi_network: "Network", wifi_connect: "Connect",
+  wifi_own: "The board's own network (no internet)", wifi_lost: "Wi-Fi not connected", wifi_trying: "Connecting…",
+  wifi_ok: "Connected. New address: %s. Put your phone back on that Wi-Fi and open it.",
+});
+Object.assign(I18N.pt, {
+  advanced: "Placa e hardware (avançado)", devmode: "Modo desenvolvedor: permitir editar arquivos do sistema", copy: "Copiar", copied: "Copiado",
+  readonly_sys: "Arquivo do sistema (só leitura). Ligue o modo desenvolvedor em Ajustes para editar.", tech_details: "Detalhes técnicos",
+  computer: "Computador", harness: "Programa de IA", harness_model: "Modelo (opcional)", auto_pick: "Automático",
+  bridge_off: "Nenhum computador conectado", bridge_on: "Conectado", bridge_hint: "No computador que tem um programa de IA instalado (claude, codex, opencode, pi ou grok), abra um terminal e cole:",
+  wifi_first: "Primeiro ponha a placa no seu Wi-Fi: Ajustes, Wi-Fi. Depois volte aqui.", wifi_network: "Rede", wifi_connect: "Conectar",
+  wifi_own: "Rede própria da placa (sem internet)", wifi_lost: "Wi-Fi desconectado", wifi_trying: "Conectando…",
+  wifi_ok: "Conectado. Novo endereço: %s. Volte o celular para esse Wi-Fi e abra-o.",
+});
 let lang = (() => {
   try { const s = localStorage.getItem("lang"); if (s) return s; } catch (e) { /* armazenamento bloqueado */ }
   return (navigator.language || "en").toLowerCase().startsWith("pt") ? "pt" : "en";
@@ -73,7 +91,6 @@ function applyI18n() {
   $$("[data-i18n]").forEach((el) => { el.textContent = t(el.dataset.i18n); });
   $$("[data-i18n-ph]").forEach((el) => { el.placeholder = t(el.dataset.i18nPh); });
   $("#lang").textContent = lang === "pt" ? "EN" : "PT";
-  $("#api-key").placeholder = t("key_kept");
 }
 
 // ---------------- API ----------------
@@ -234,14 +251,15 @@ function handleEvent(e) {
     case "assistant": addMsg("assistant", md(e.text)); break;
     case "tool_call": addToolCall(e.name, e.args); break;
     case "tool_result": addToolResult(e.text); break;
-    case "error": addMsg("error", esc(e.text)); KIPP.set("error", 4000); setBusy(false); break;
+    case "error":
+      addMsg("error", esc(e.text) + (e.detail ? "<details><summary>" + esc(t("tech_details")) + "</summary>" + esc(e.detail) + "</details>" : ""));
+      KIPP.set("error", 4000); setBusy(false);
+      if (e.reason === "no_bridge") refreshStatus();
+      break;
     case "state":
       if (e.state === "thinking" || e.state === "working") { setBusy(true, e.state); KIPP.set(e.state); }
       else if (e.state === "done") { setBusy(false); KIPP.set("happy", 2500); }
       else if (e.state === "error") { setBusy(false); KIPP.set("error", 4000); }
-      break;
-    case "log":
-      if (busy && stateLine && /^model busy/.test(e.text || "")) stateLine.textContent = t("model_busy") + " · " + e.text.replace(/^model busy /, "");
       break;
     case "program": case "program_output": if (view === "programs") schedulePrograms(); break;
     case "espnow_msg": addInbox(e.sender + ": " + e.text); break;
@@ -379,13 +397,21 @@ async function openFile(path, text) {
   editing = path;
   $("#editor").hidden = false;
   $("#editor-path").textContent = path;
-  $("#ed-warn").hidden = !SYSTEM.some((s) => path === s || path.startsWith(s + "/"));
+  const sys = isSystem(path), locked = sys && !devMode();
+  $("#ed-warn").hidden = !sys;
+  $("#ed-warn").textContent = t(locked ? "readonly_sys" : "system_file");
+  $("#ed-text").readOnly = locked;
+  $("#ed-save").hidden = locked;
+  $("#ed-delete").hidden = locked;
   $("#ed-text").value = text !== undefined ? text : await api("/api/file?path=" + encodeURIComponent(path), { raw: true }).catch((e) => "# " + e.message);
-  $("#ed-run").hidden = !path.endsWith(".py");
+  $("#ed-run").hidden = !path.endsWith(".py") || sys;
   $("#editor").scrollIntoView({ block: "start" });
 }
+function isSystem(path) { return SYSTEM.some((x) => path === x || path.startsWith(x + "/")); }
+function devMode() { try { return localStorage.getItem("devmode") === "1"; } catch (e) { return false; } }
 async function saveFile() {
-  await api("/api/file?path=" + encodeURIComponent(editing), { method: "POST", body: $("#ed-text").value });
+  const force = isSystem(editing) && devMode() ? "&force=1" : "";
+  await api("/api/file?path=" + encodeURIComponent(editing) + force, { method: "POST", body: $("#ed-text").value });
 }
 $("#ed-save").addEventListener("click", async () => { try { await saveFile(); loadFiles(cwd); flash($("#ed-save"), t("saved")); } catch (e) { alert(e.message); } });
 $("#ed-run").addEventListener("click", async () => {
@@ -400,7 +426,7 @@ $("#ed-run").addEventListener("click", async () => {
 });
 $("#ed-delete").addEventListener("click", async () => {
   if (!confirm(t("confirm_delete", editing))) return;
-  await api("/api/file/delete", { method: "POST", body: { path: editing } }).catch((e) => alert(e.message));
+  await api("/api/file/delete", { method: "POST", body: { path: editing, force: isSystem(editing) && devMode() } }).catch((e) => alert(e.message));
   $("#editor").hidden = true; editing = null; loadFiles(cwd);
 });
 $("#ed-close").addEventListener("click", () => { $("#editor").hidden = true; editing = null; });
@@ -475,84 +501,63 @@ $("#en-run").addEventListener("click", () => espnowAction("run"));
 setInterval(() => { if (view === "network" && !document.hidden) loadNetwork(); }, 6000);
 
 // ---------------- ajustes ----------------
-let presets = {}, cfg = {};
+let cfg = {};
+const connectCmd = () => "curl -fsS http://" + location.host + "/bridge.py -o bridge.py && python3 bridge.py http://" + location.host;
 async function loadSettings() {
   try {
-    const r = await api("/api/config");
-    cfg = r.config; presets = r.presets;
-    $("#preset").value = cfg.llm_preset || "custom";
-    $("#base-url").value = cfg.llm_base_url || "";
-    $("#api-key").value = "";
-    $("#api-key").placeholder = cfg.llm_api_key ? cfg.llm_api_key + " · " + t("key_kept") : "";
-    $("#model").value = cfg.llm_model || "";
-    $("#tpm").value = cfg.llm_tpm || 0;
-    $("#max-tokens").value = cfg.llm_max_tokens || 1500;
-    const ws = $("#wifi-ssid");
-    ws.innerHTML = "<option value=''>" + esc(cfg.wifi_ssid ? cfg.wifi_ssid + " " + t("keep_ssid") : "—") + "</option>";
-    $("#wifi-pass").value = "";
+    cfg = (await api("/api/config")).config;
     $("#board-name").value = cfg.name || "";
     $("#channel").value = cfg.espnow_channel || 1;
     $("#oled-sda").value = cfg.oled.sda; $("#oled-scl").value = cfg.oled.scl; $("#oled-addr").value = cfg.oled.addr;
     $("#rgb-pin").value = cfg.rgb_led_pin;
     $("#tz").value = (cfg.tz_offset_min || 0) / 60;
-    localHint();
+    $("#harness-model").value = cfg.harness_model || "";
+    $("#devmode").checked = devMode();
     const st = await api("/api/status");
+    const n = st.network, b = st.bridge;
+    $("#bridge-now").textContent = b.connected ? t("bridge_on") : t("bridge_off");
+    $("#bridge-hint").textContent = "";
+    $("#harness").innerHTML = "<option value=''>" + esc(t("auto_pick")) + "</option>" + b.available.map((h) => "<option>" + esc(h) + "</option>").join("");
+    $("#harness").value = cfg.harness || "";
+    $("#wifi-now").textContent = n.mode === "sta" ? n.ssid : n.mode === "ap" ? t("wifi_own") : t("wifi_lost");
+    $("#wifi-now-ip").textContent = n.ip ? "http://" + n.ip + (n.name ? " · http://" + n.name + ".local" : "") : "";
     $("#about").textContent = "openTARS Self-Programming " + st.version + " · " + Math.round(st.memory.free / 1024) + " KB " + t("free");
   } catch (e) { $("#save-msg").textContent = e.message; }
 }
-function localHint() {
-  const local = ["ollama", "lmstudio"].includes($("#preset").value);
-  $("#local-hint").hidden = !local;
-  $$("#tpm, #max-tokens, label[for=tpm], label[for=max-tokens]").forEach((el) => { el.hidden = local; });  // limites de cota não existem em modelo local
-  const p = presets[$("#preset").value];
-  $("#base-url").placeholder = local && p && p.example ? p.example : "https://…";
-}
-$("#preset").addEventListener("change", () => {
-  const p = presets[$("#preset").value];
-  if (p && $("#preset").value !== "custom") { $("#base-url").value = p.base_url; $("#model").value = p.model; }
-  localHint();
-  if (p && !p.base_url && p.example) $("#base-url").focus();   // local: a pessoa precisa digitar o IP do computador
-});
-$("#load-models").addEventListener("click", async () => {
-  const msg = $("#models-msg");
-  msg.hidden = false; msg.textContent = "…";
-  try {
-    await saveSettings(true);
-    const r = await api("/api/models", { timeout: 30000 });
-    $("#model-options").innerHTML = r.models.map((m) => "<option value='" + esc(m) + "'>").join("");
-    msg.textContent = t("models_found", r.models.length) + ": " + r.models.slice(0, 12).join(", ") + (r.models.length > 12 ? "…" : "");
-  } catch (e) { msg.textContent = e.message; }
-});
-$("#scan").addEventListener("click", async () => {
-  const b = $("#scan"); b.disabled = true;
+async function scanWifi() {
+  $("#wifi-msg").textContent = "…";
   try {
     const r = await api("/api/wifi/scan", { timeout: 20000 });
-    const ws = $("#wifi-ssid"), keep = ws.options[0].outerHTML;
-    ws.innerHTML = keep + r.networks.map((n) => "<option value='" + esc(n.ssid) + "'>" + esc(n.ssid) + " (" + n.rssi + " dBm" + (n.open ? "" : " 🔒") + ")</option>").join("");
-  } catch (e) { alert(e.message); }
-  b.disabled = false;
+    $("#wifi-ssid").innerHTML = r.networks.map((w) => "<option>" + esc(w.ssid) + "</option>").join("");
+    $("#wifi-msg").textContent = "";
+  } catch (e) { $("#wifi-msg").textContent = e.message; }
+}
+$("#wifi-scan").addEventListener("click", scanWifi);
+$("#wifi-go").addEventListener("click", async () => {
+  $("#wifi-msg").textContent = t("wifi_trying");
+  try {
+    const r = await api("/api/wifi/connect", { method: "POST", body: { ssid: $("#wifi-ssid").value, password: $("#wifi-pass").value }, timeout: 40000 });
+    $("#wifi-msg").textContent = r.ok ? t("wifi_ok", r.ip || "") : (r.error || r.reason || "failed");
+  } catch (e) { $("#wifi-msg").textContent = e.message; }
 });
-async function saveSettings(quiet) {
+$("#devmode").addEventListener("change", (ev) => {
+  try { localStorage.setItem("devmode", ev.target.checked ? "1" : "0"); } catch (e) { /* sem armazenamento */ }
+});
+async function saveSettings() {
   const body = {
-    llm_tpm: parseInt($("#tpm").value, 10) || 0, llm_max_tokens: parseInt($("#max-tokens").value, 10) || 1500,
-    llm_preset: $("#preset").value, llm_base_url: $("#base-url").value.trim(), llm_model: $("#model").value.trim(),
+    harness: $("#harness").value, harness_model: $("#harness-model").value.trim(),
     name: $("#board-name").value.trim(), espnow_channel: parseInt($("#channel").value, 10) || 1, lang,
-    oled: Object.assign({}, cfg.oled || {}, { sda: +$("#oled-sda").value, scl: +$("#oled-scl").value, addr: +$("#oled-addr").value }),
+    oled: { sda: +$("#oled-sda").value, scl: +$("#oled-scl").value, addr: +$("#oled-addr").value },
     rgb_led_pin: +$("#rgb-pin").value,
     tz_offset_min: Math.round((parseFloat($("#tz").value) || 0) * 60),
   };
-  if ($("#api-key").value) body.llm_api_key = $("#api-key").value.trim();
-  const newWifi = $("#wifi-ssid").value;
-  if (newWifi) body.wifi_ssid = newWifi;
-  if ($("#wifi-pass").value) body.wifi_password = $("#wifi-pass").value;
   const r = await api("/api/config", { method: "POST", body });
   cfg = r.config;
-  const ssid = newWifi || cfg.wifi_ssid, host = cfg.name || boardName;
-  if (!quiet) $("#save-msg").textContent = newWifi || $("#wifi-pass").value ? t("saved_reboot", ssid, ssid, host) : t("saved");
-  $("#api-key").value = "";
-  $("#api-key").placeholder = cfg.llm_api_key ? cfg.llm_api_key + " · " + t("key_kept") : "";
+  $("#save-msg").textContent = r.rejected && r.rejected.length ? t("saved") + " (" + r.rejected.join(", ") + " ✗)" : t("saved");
+  loadSettings();
+  refreshStatus();
 }
-$("#settings").addEventListener("submit", async (ev) => { ev.preventDefault(); try { await saveSettings(false); } catch (e) { $("#save-msg").textContent = e.message; } });
+$("#settings").addEventListener("submit", async (ev) => { ev.preventDefault(); try { await saveSettings(); } catch (e) { $("#save-msg").textContent = e.message; } });
 $("#reboot").addEventListener("click", async () => {
   if (!confirm(t("confirm_reboot"))) return;
   await api("/api/reboot", { method: "POST" }).catch(() => {});
@@ -564,24 +569,36 @@ $("#clear-chat").addEventListener("click", async () => {
 });
 
 // ---------------- cabeçalho e início ----------------
-let boardName = "opentars";
+let boardName = "opentars", lastStatus = null;
 async function refreshStatus() {
   try {
     const s = await api("/api/status");
+    lastStatus = s;
     const n = s.network;
     boardName = n.name || boardName;
     $("#board-line").textContent = [n.name, n.ip, n.mode === "ap" ? t("own_network") : n.ssid, s.memory.free ? Math.round(s.memory.free / 1024) + " KB " + t("free") : ""]
       .filter(Boolean).join(" · ");
+    const off = !s.bridge.connected;
+    $("#need-ai").hidden = !off;
+    if (off) {
+      $("#need-text").textContent = s.network.mode === "ap" ? t("wifi_first") : t("bridge_hint");
+      $("#cmd").textContent = connectCmd();
+      $("#cmd").hidden = $("#copy-cmd").hidden = s.network.mode === "ap";
+    }
   } catch (e) { /* o laço de eventos cuida da faixa */ }
 }
+$("#copy-cmd").addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText(connectCmd()); $("#copy-cmd").textContent = t("copied"); } catch (e) { /* http: o navegador pode negar; o comando está na tela */ }
+});
 $("#lang").addEventListener("click", () => {
   lang = lang === "pt" ? "en" : "pt";
   try { localStorage.setItem("lang", lang); } catch (e) { /* sem armazenamento: vale só nesta visita */ }
+  api("/api/config", { method: "POST", body: { lang } }).catch(() => {});   // a placa também responde no idioma escolhido
   applyI18n(); refreshStatus();
   if (view !== "chat") show(view);
 });
 
 applyI18n();
-refreshStatus();
 setInterval(() => { if (!document.hidden) refreshStatus(); }, 15000);
 loadHistory().then(eventLoop);
+window.addEventListener("load", refreshStatus);

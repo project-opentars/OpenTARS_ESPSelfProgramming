@@ -4,7 +4,7 @@ import json
 from . import compat
 
 MAX_BODY = 256 * 1024
-TYPES = {"html": "text/html; charset=utf-8", "js": "application/javascript", "css": "text/css",
+TYPES = {"py": "text/plain; charset=utf-8", "html": "text/html; charset=utf-8", "js": "application/javascript", "css": "text/css",
          "json": "application/json", "png": "image/png", "svg": "image/svg+xml", "ico": "image/x-icon",
          "woff2": "font/woff2", "ttf": "font/ttf", "webmanifest": "application/manifest+json", "txt": "text/plain"}
 STATUS = {200: "OK", 204: "No Content", 400: "Bad Request", 404: "Not Found", 405: "Method Not Allowed",
@@ -39,9 +39,23 @@ def parse_query(qs):
     return q
 
 
+def _peer_ip(writer):
+    """IP de quem fez o pedido, ou "" se a plataforma não informar."""
+    try:
+        peer = writer.get_extra_info("peername")
+    except Exception:
+        return ""
+    if isinstance(peer, tuple) and peer:
+        return str(peer[0])
+    if isinstance(peer, (bytes, bytearray)) and len(peer) >= 8:   # sockaddr cru do lwIP: família(2) porta(2) ip(4)
+        return "%d.%d.%d.%d" % (peer[4], peer[5], peer[6], peer[7])
+    return ""
+
+
 class Request:
     def __init__(self, method, path, query, headers, body):
         self.method, self.path, self.query, self.headers, self.body = method, path, query, headers, body
+        self.client = ""
 
     def json(self):
         try:
@@ -91,6 +105,7 @@ class Server:
             body = await reader.readexactly(n) if n else b""
             path, _, qs = target.partition("?")
             req = Request(method, unquote(path), parse_query(qs), headers, body)
+            req.client = _peer_ip(writer)
             handler = self.routes.get((method, req.path))
             if handler:
                 try:

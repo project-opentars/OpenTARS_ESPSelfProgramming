@@ -77,7 +77,7 @@ def read_text(path, default=None):
     try:
         with open(fs(path)) as f:
             return f.read()
-    except OSError:
+    except (OSError, UnicodeError, ValueError):  # não existe, é pasta, ou é binário
         return default
 
 
