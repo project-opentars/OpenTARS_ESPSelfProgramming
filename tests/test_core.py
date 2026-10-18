@@ -181,7 +181,7 @@ async def principal():
     conferir("programa com delay() para quando pedem", res["stopped"] == ["laco"] and p.status == "stopped" and any("volta" in x for x in p.log), (res, p.status, p.log[-3:]))
     p = programs.start(code="a = 1\nb = 0\nprint(a / b)\n")
     await programs.await_done(p, 3000)
-    r = await tools.call("run_code", {"code": "import inspect"})
+    r = await tools.call("run_code", {"code": "import modulo_que_nao_existe"})
     conferir("run_code devolve o traceback do erro (não 'printed nothing')", "ImportError" in r or "ModuleNotFoundError" in r or "No module" in r, r)
     conferir("erro no programa guarda o traceback com a linha", p.status == "error" and "line 3" in p.error and "ZeroDivisionError" in p.error, p.error)
     p = programs.start(name="teimoso", code="import time\nwhile True:\n    time.sleep(0.01)\n")
