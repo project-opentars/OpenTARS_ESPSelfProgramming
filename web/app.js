@@ -63,7 +63,7 @@ const I18N = {
   },
 };
 Object.assign(I18N.en, {
-  advanced: "Board and hardware (advanced)", devmode: "Developer mode: allow editing system files", copy: "Copy", copied: "Copied",
+  advanced: "Board and hardware (advanced)", devmode: "Developer mode: allow editing system files", copy: "Copy", copied: "Copied", copy_manual: "Selected: copy it",
   readonly_sys: "System file (read-only). Turn on developer mode in Settings to edit it.", tech_details: "Technical details",
   computer: "Computer", harness: "AI program", harness_model: "Model (optional)", auto_pick: "Automatic",
   bridge_off: "No computer connected", bridge_on: "Connected", bridge_hint: "On the computer that has an AI program installed (claude, codex, opencode, pi or grok), open a terminal and paste:",
@@ -72,7 +72,7 @@ Object.assign(I18N.en, {
   wifi_ok: "Connected. New address: %s. Put your phone back on that Wi-Fi and open it.",
 });
 Object.assign(I18N.pt, {
-  advanced: "Placa e hardware (avançado)", devmode: "Modo desenvolvedor: permitir editar arquivos do sistema", copy: "Copiar", copied: "Copiado",
+  advanced: "Placa e hardware (avançado)", devmode: "Modo desenvolvedor: permitir editar arquivos do sistema", copy: "Copiar", copied: "Copiado", copy_manual: "Selecionado: copie",
   readonly_sys: "Arquivo do sistema (só leitura). Ligue o modo desenvolvedor em Ajustes para editar.", tech_details: "Detalhes técnicos",
   computer: "Computador", harness: "Programa de IA", harness_model: "Modelo (opcional)", auto_pick: "Automático",
   bridge_off: "Nenhum computador conectado", bridge_on: "Conectado", bridge_hint: "No computador que tem um programa de IA instalado (claude, codex, opencode, pi ou grok), abra um terminal e cole:",
@@ -588,7 +588,15 @@ async function refreshStatus() {
   } catch (e) { /* o laço de eventos cuida da faixa */ }
 }
 $("#copy-cmd").addEventListener("click", async () => {
-  try { await navigator.clipboard.writeText(connectCmd()); $("#copy-cmd").textContent = t("copied"); } catch (e) { /* http: o navegador pode negar; o comando está na tela */ }
+  const cmd = $("#cmd");
+  let ok = false;
+  try { await navigator.clipboard.writeText(connectCmd()); ok = true; } catch (e) { /* página http: o navegador só libera a área de transferência em https */ }
+  if (!ok) {   // plano B: seleciona o comando e usa o copiar antigo
+    const r = document.createRange(); r.selectNodeContents(cmd);
+    const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r);
+    try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+  }
+  $("#copy-cmd").textContent = ok ? t("copied") : t("copy_manual");   // sem copiar, o texto fica selecionado: é só tocar em Copiar do menu
 });
 $("#lang").addEventListener("click", () => {
   lang = lang === "pt" ? "en" : "pt";
