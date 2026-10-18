@@ -1,0 +1,2 @@
+{"name": "openTARS Self-Programming", "short_name": "openTARS SP", "start_url": "/", "display": "standalone",
+ "background_color": "#151E3D", "theme_color": "#0F1730", "icons": [{"src": "icon.svg", "sizes": "any", "type": "image/svg+xml"}]}

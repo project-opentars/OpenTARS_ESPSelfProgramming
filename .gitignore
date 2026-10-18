@@ -1,0 +1,4 @@
+firmware/*.bin
+board/www/
+__pycache__/
+*.pyc

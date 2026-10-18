@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0F1730">
+<title>openTARS Self-Programming</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<a class="skip" href="#main" data-i18n="skip">Skip to content</a>
+<header class="top">
+  <canvas id="kipp" width="69" height="75" aria-hidden="true"></canvas>
+  <div class="who">
+    <h1>openTARS <span>Self-Programming</span></h1>
+    <p id="board-line" class="muted">…</p>
+  </div>
+  <button id="lang" class="chip" type="button" aria-label="Language">PT</button>
+</header>
+
+<nav class="tabs" aria-label="Sections">
+  <button type="button" data-view="chat" aria-current="page"><span aria-hidden="true">◆</span> <span data-i18n="tab_chat">Chat</span></button>
+  <button type="button" data-view="programs"><span aria-hidden="true">▶</span> <span data-i18n="tab_programs">Programs</span></button>
+  <button type="button" data-view="code"><span aria-hidden="true">{ }</span> <span data-i18n="tab_code">Code</span></button>
+  <button type="button" data-view="network"><span aria-hidden="true">≋</span> <span data-i18n="tab_network">Boards</span></button>
+  <button type="button" data-view="settings"><span aria-hidden="true">⚙</span> <span data-i18n="tab_settings">Settings</span></button>
+</nav>
+
+<div id="offline" class="banner" hidden data-i18n="offline">Board not answering. Retrying…</div>
+
+<main id="main" tabindex="-1">
+  <!-- CHAT -->
+  <section id="view-chat" class="view chat">
+    <div id="messages" class="messages" role="log" aria-label="Conversation"></div>
+    <div id="empty" class="empty">
+      <p data-i18n="empty_title">Ask the board to program itself.</p>
+      <div class="suggest">
+        <button type="button" class="chip" data-i18n="s1">Make the LED breathe blue</button>
+        <button type="button" class="chip" data-i18n="s2">Show a spinning 3D cube on the screen</button>
+        <button type="button" class="chip" data-i18n="s3">What is connected to you?</button>
+        <button type="button" class="chip" data-i18n="s4">Which other boards can you see?</button>
+      </div>
+    </div>
+    <form id="composer" class="composer">
+      <label for="prompt" class="sr-only" data-i18n="prompt_label">Message</label>
+      <textarea id="prompt" rows="1" data-i18n-ph="prompt_ph" placeholder="Tell the board what to do…"></textarea>
+      <button id="send" type="submit" class="primary" data-i18n="send">Send</button>
+      <button id="stop" type="button" class="danger" hidden data-i18n="stop">Stop</button>
+    </form>
+  </section>
+
+  <!-- PROGRAMS -->
+  <section id="view-programs" class="view" hidden>
+    <div class="row between"><h2 data-i18n="programs">Programs</h2>
+      <button type="button" id="stop-all" class="ghost" data-i18n="stop_all">Stop all</button></div>
+    <ul id="program-list" class="cards"></ul>
+    <p class="muted small" data-i18n="programs_hint">Programs run in the background. Hold BOOT while powering on to skip the ones that start automatically.</p>
+  </section>
+
+  <!-- CODE -->
+  <section id="view-code" class="view" hidden>
+    <div class="row between wrap">
+      <nav id="crumbs" class="crumbs" aria-label="Folder"></nav>
+      <div class="row">
+        <button type="button" id="new-file" class="ghost" data-i18n="new_file">New file</button>
+      </div>
+    </div>
+    <ul id="file-list" class="files"></ul>
+    <div id="editor" class="editor" hidden>
+      <div class="row between wrap">
+        <strong id="editor-path" class="mono"></strong>
+        <div class="row">
+          <button type="button" id="ed-run" class="primary" data-i18n="run">Run</button>
+          <button type="button" id="ed-save" data-i18n="save">Save</button>
+          <button type="button" id="ed-delete" class="ghost" data-i18n="delete">Delete</button>
+          <button type="button" id="ed-close" class="ghost" data-i18n="close">Close</button>
+        </div>
+      </div>
+      <p id="ed-warn" class="warn small" hidden data-i18n="system_file">System file: a mistake here can stop the board from starting (fix it over USB).</p>
+      <label for="ed-text" class="sr-only">Code</label>
+      <textarea id="ed-text" class="code" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea>
+    </div>
+    <details class="quick">
+      <summary data-i18n="quick_run">Quick run</summary>
+      <label for="quick-code" class="sr-only">Code</label>
+      <textarea id="quick-code" class="code short" spellcheck="false" autocapitalize="off">print("hello from", __name__)</textarea>
+      <button type="button" id="quick-go" class="primary" data-i18n="run">Run</button>
+      <pre id="quick-out" class="out" hidden></pre>
+    </details>
+  </section>
+
+  <!-- NETWORK -->
+  <section id="view-network" class="view" hidden>
+    <h2 data-i18n="this_board">This board</h2>
+    <dl id="me" class="facts"></dl>
+    <h2 data-i18n="other_boards">Other boards (ESP-NOW)</h2>
+    <ul id="peer-list" class="cards"></ul>
+    <p class="muted small" data-i18n="espnow_hint">Boards find each other by themselves when they are on the same Wi-Fi channel. Boards on your Wi-Fi use the router's channel; boards without Wi-Fi use the channel set in Settings.</p>
+    <form id="espnow-form" class="stack">
+      <label for="en-to" data-i18n="to">To</label>
+      <select id="en-to"></select>
+      <label for="en-text" data-i18n="message">Message or code</label>
+      <textarea id="en-text" class="code short" spellcheck="false" autocapitalize="off"></textarea>
+      <div class="row">
+        <button type="button" id="en-send" data-i18n="send_text">Send as text</button>
+        <button type="button" id="en-run" class="primary" data-i18n="run_there">Run there</button>
+      </div>
+      <pre id="en-out" class="out" hidden></pre>
+    </form>
+    <h3 data-i18n="received">Received</h3>
+    <ul id="inbox" class="log-list"></ul>
+  </section>
+
+  <!-- SETTINGS -->
+  <section id="view-settings" class="view" hidden>
+    <form id="settings" class="stack">
+      <h2 data-i18n="model">Model</h2>
+      <label for="preset" data-i18n="provider">Provider</label>
+      <select id="preset">
+        <option value="ollama">Ollama (local)</option>
+        <option value="lmstudio">LM Studio (local)</option>
+        <option value="gemini">Google Gemini</option>
+        <option value="openai">OpenAI</option>
+        <option value="groq">Groq</option>
+        <option value="openrouter">OpenRouter</option>
+        <option value="custom" data-i18n="custom">Other (OpenAI-compatible)</option>
+      </select>
+      <p id="local-hint" class="muted small" hidden data-i18n="ollama_hint">The model runs on your computer. Ollama must accept connections from the network (OLLAMA_HOST=0.0.0.0) and the address below must use your computer's IP.</p>
+      <label for="base-url" data-i18n="base_url">Address</label>
+      <input id="base-url" type="url" autocomplete="off" spellcheck="false">
+      <label for="api-key" data-i18n="api_key">API key</label>
+      <input id="api-key" type="password" autocomplete="off" spellcheck="false">
+      <label for="model" data-i18n="model_name">Model name</label>
+      <div class="row">
+        <input id="model" list="model-options" autocomplete="off" spellcheck="false">
+        <button type="button" id="load-models" class="ghost" data-i18n="load_models">List models</button>
+      </div>
+      <datalist id="model-options"></datalist>
+      <p id="models-msg" class="muted small" hidden></p>
+
+      <h2>Wi-Fi</h2>
+      <div class="row">
+        <select id="wifi-ssid" aria-label="Wi-Fi network"></select>
+        <button type="button" id="scan" class="ghost" data-i18n="scan">Scan</button>
+      </div>
+      <label for="wifi-pass" data-i18n="password">Password</label>
+      <input id="wifi-pass" type="password" autocomplete="off">
+
+      <h2 data-i18n="board">Board</h2>
+      <label for="board-name" data-i18n="board_name">Name on the network</label>
+      <input id="board-name" autocomplete="off" spellcheck="false" placeholder="opentars-xxxx">
+      <label for="channel" data-i18n="channel">ESP-NOW channel when there is no Wi-Fi</label>
+      <input id="channel" type="number" min="1" max="13">
+      <fieldset class="grid3">
+        <legend data-i18n="oled_pins">OLED screen (I2C)</legend>
+        <label>SDA <input id="oled-sda" type="number" min="0" max="48"></label>
+        <label>SCL <input id="oled-scl" type="number" min="0" max="48"></label>
+        <label data-i18n-label="addr">Addr <input id="oled-addr" type="number" min="8" max="119"></label>
+      </fieldset>
+      <label for="rgb-pin" data-i18n="rgb_pin">Onboard RGB LED pin</label>
+      <input id="rgb-pin" type="number" min="0" max="48">
+
+      <div class="row sticky-save">
+        <button type="submit" class="primary" data-i18n="save">Save</button>
+        <span id="save-msg" class="muted small" role="status"></span>
+      </div>
+      <h2 data-i18n="maintenance">Maintenance</h2>
+      <div class="row wrap">
+        <button type="button" id="reboot" class="ghost" data-i18n="reboot">Restart board</button>
+        <button type="button" id="clear-chat" class="ghost" data-i18n="clear_chat">Clear conversation</button>
+      </div>
+      <p class="muted small" id="about"></p>
+      <p class="warn small" data-i18n="security">No password: anyone on this Wi-Fi can open this page and run code on the board.</p>
+    </form>
+  </section>
+</main>
+<script src="app.js"></script>
+</body>
+</html>
