@@ -14,11 +14,79 @@ PRESETS = {
 
 
 RETRY_STATUS = (429, 500, 502, 503, 504)
-RETRY_WAITS = (3, 8)   # duas novas tentativas, com espera crescente
+MAX_RETRIES = 3
+MAX_WAIT_S = 45
+_used = []              # (ms, tokens) dos pedidos dos últimos 60 s, para respeitar a cota por minuto
+WAIT_SCALE = 1.0        # os testes diminuem isto para não esperar de verdade
 
 
 class LLMError(Exception):
     pass
+
+
+def retry_wait(headers, text, attempt):
+    """Quanto esperar antes de repetir: o Retry-After do provedor, ou o "try again in 7.2s" da mensagem (Groq), ou 4 s * tentativa."""
+    wait = None
+    ra = (headers or {}).get("retry-after")
+    if ra:
+        try:
+            wait = float(ra)
+        except ValueError:
+            pass
+    if wait is None:
+        i = text.find("try again in ")
+        if i >= 0:
+            rest = text[i + 13:i + 40]
+            total, num = 0.0, ""
+            for ch in rest:
+                if ch.isdigit() or ch == ".":
+                    num += ch
+                elif ch == "m" and num:
+                    total += float(num) * 60
+                    num = ""
+                elif ch == "s" and num:
+                    total += float(num)
+                    num = ""
+                    break
+                else:
+                    break
+            if total:
+                wait = total
+    if wait is None:
+        wait = 4 * attempt
+    return int(min(MAX_WAIT_S, max(2, wait + 1)))
+
+
+def learn_limit(text):
+    """A Groq diz no 429: 'Limit 8000, Used 7000, Requested 2000'. Devolve o limite por minuto, ou 0."""
+    i = text.find("Limit ")
+    if i < 0:
+        return 0
+    num = ""
+    for ch in text[i + 6:i + 16]:
+        if ch.isdigit():
+            num += ch
+        else:
+            break
+    return int(num) if num else 0
+
+
+def _pace_wait(limit, need):
+    """Segundos para esperar antes de enviar, para não passar da cota por minuto (soma dos últimos 60 s + este pedido)."""
+    from . import compat
+    now = compat.ticks_ms()
+    while _used and compat.ticks_diff(now, _used[0][0]) > 60000:
+        _used.pop(0)
+    total = sum(t for _, t in _used)
+    if not limit or total + need <= limit:
+        return 0
+    acc, i = total, 0
+    while acc + need > limit and i < len(_used):
+        acc -= _used[i][1]
+        i += 1
+    if i == 0:
+        return 0
+    return min(50, max(1, (60000 - compat.ticks_diff(now, _used[i - 1][0])) // 1000 + 1))
 
 
 def _headers(cfg):
@@ -34,6 +102,9 @@ def clean_messages(messages, base_url):
     keep_extra = "googleapis" in base_url
     out = []
     for m in messages:
+        if m["role"] == "user" and out and out[-1]["role"] == "user":
+            out[-1]["content"] = str(out[-1]["content"]) + "\n" + str(m.get("content") or "")
+            continue
         c = {"role": m["role"], "content": m.get("content")}
         if m["role"] == "tool":
             c["tool_call_id"] = m.get("tool_call_id", "")
@@ -59,24 +130,46 @@ async def chat(cfg, messages, tools=None):
     body = {"model": cfg["llm_model"], "messages": clean_messages(messages, base), "max_tokens": cfg.get("llm_max_tokens", 4096)}
     if tools:
         body["tools"] = tools
-    payload = json.dumps(body)
-    for wait_s in RETRY_WAITS + (None,):
-        status, _, data = await http_client.request("POST", base + "/chat/completions", _headers(cfg), payload,
-                                                    cfg.get("llm_timeout_s", 120))
-        if status not in RETRY_STATUS or wait_s is None:
+    payload = json.dumps(body, separators=(",", ":"))  # compacto: menos bytes e menos tokens contados por alguns provedores
+    attempt = 0
+    from . import compat, config, events
+    import asyncio
+    need = len(payload) // 3 + body["max_tokens"]   # estimativa "pedida" (prompt + teto da resposta), como a Groq conta
+    wait = _pace_wait(cfg.get("llm_tpm", 0), need)
+    if wait:
+        events.emit("log", text="model busy: waiting %d s to stay under the provider's token limit" % wait)
+        await asyncio.sleep(wait * WAIT_SCALE)
+    while True:
+        status, rh, data = await http_client.request("POST", base + "/chat/completions", _headers(cfg), payload,
+                                                     cfg.get("llm_timeout_s", 120))
+        text = data[:600].decode("utf-8", "replace") if data else ""
+        # tool_use_failed: o modelo (gpt-oss na Groq, por exemplo) montou a chamada de ferramenta torta; costuma acertar na segunda
+        retryable = status in RETRY_STATUS or (status == 400 and "tool_use_failed" in text)
+        if status == 200 or not retryable or attempt >= MAX_RETRIES:
             break
-        # sobrecarga ou limite temporário do provedor (ex.: Gemini 503 "high demand"): espera e tenta de novo
-        from . import events
-        events.emit("log", text="model busy (HTTP %d), trying again in %d s" % (status, wait_s))
-        import asyncio
-        await asyncio.sleep(wait_s)
+        attempt += 1
+        if status == 429 and not cfg.get("llm_tpm"):
+            lim = learn_limit(text)
+            if lim:  # aprende o limite por minuto e passa a respeitá-lo antes de enviar (salvo na configuração)
+                cfg = config.save({"llm_tpm": int(lim * 0.85)})
+                events.emit("log", text="provider limit learned: %d tokens per minute" % lim)
+        wait_s = retry_wait(rh, text, attempt)
+        events.emit("log", text="model busy (HTTP %d), trying again in %d s (%d/%d)" % (status, wait_s, attempt, MAX_RETRIES))
+        await asyncio.sleep(wait_s * WAIT_SCALE)
     if status != 200:
-        raise LLMError("HTTP %d: %s" % (status, data[:400].decode("utf-8", "replace") if data else ""))
+        if status == 429:
+            raise LLMError("The provider's rate limit was hit (HTTP 429). Free plans limit tokens per minute: wait a minute and send again, "
+                           "or pick another model or provider in Settings. " + text[:200])
+        raise LLMError("HTTP %d: %s" % (status, text[:400]))
     try:
         resp = json.loads(data)
         msg = resp["choices"][0]["message"]
     except (ValueError, KeyError, IndexError):
         raise LLMError("unexpected reply: " + data[:300].decode("utf-8", "replace"))
+    try:
+        _used.append((compat.ticks_ms(), int(resp["usage"]["total_tokens"])))
+    except (KeyError, TypeError, ValueError):
+        _used.append((compat.ticks_ms(), need))
     msg["role"] = "assistant"
     return msg
 

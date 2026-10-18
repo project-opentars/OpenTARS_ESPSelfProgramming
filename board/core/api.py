@@ -56,6 +56,8 @@ def make_server():
         out = []
         for m in ag.history:
             if m["role"] == "user":
+                if (m.get("content") or "").startswith(agent_mod.AUTO):
+                    continue  # mensagem interna do sistema
                 out.append({"kind": "user", "text": m.get("content", "")})
             elif m["role"] == "assistant":
                 if m.get("content"):
@@ -178,6 +180,10 @@ def make_server():
         async def later():
             await asyncio.sleep(0.6)
             import machine
+            try:
+                compat.write_text("/data/state.json", json.dumps({"clean": True}))  # reinício pedido por quem usa: não é queda
+            except Exception:
+                pass
             machine.reset()
         asyncio.create_task(later())
         return reply({"ok": True})

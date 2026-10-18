@@ -22,7 +22,8 @@ const I18N = {
     ollama_hint: "The model runs on your computer. Ollama must accept connections from the network (OLLAMA_HOST=0.0.0.0) and the address below must use your computer's IP.",
     base_url: "Address", api_key: "API key", model_name: "Model name", load_models: "List models", scan: "Scan", password: "Password",
     board: "Board", board_name: "Name on the network", channel: "ESP-NOW channel when there is no Wi-Fi", oled_pins: "OLED screen (I2C)",
-    rgb_pin: "Onboard RGB LED pin", maintenance: "Maintenance", reboot: "Restart board", clear_chat: "Clear conversation",
+    tpm: "Provider limit, tokens per minute (0 = unknown; it learns it from a 429)", max_tokens: "Max reply tokens (lower is kinder to free plans)",
+    rgb_pin: "Onboard RGB LED pin", tz: "Time zone (hours from UTC, e.g. -3 for São Paulo)", model_busy: "model busy, trying again", maintenance: "Maintenance", reboot: "Restart board", clear_chat: "Clear conversation",
     security: "No password: anyone on this Wi-Fi can open this page and run code on the board.",
     thinking: "thinking…", working: "running tools…", busy: "The board is still working on the last request.",
     no_programs: "No programs yet. Ask the board to make one.", log: "Log", run_again: "Run again", autostart: "Start on power-on",
@@ -48,7 +49,8 @@ const I18N = {
     ollama_hint: "O modelo roda no seu computador. O Ollama precisa aceitar conexões da rede (OLLAMA_HOST=0.0.0.0) e o endereço abaixo precisa usar o IP do computador.",
     base_url: "Endereço", api_key: "Chave da API", model_name: "Nome do modelo", load_models: "Listar modelos", scan: "Procurar", password: "Senha",
     board: "Placa", board_name: "Nome na rede", channel: "Canal do ESP-NOW quando não há Wi-Fi", oled_pins: "Tela OLED (I2C)",
-    rgb_pin: "Pino do LED RGB da placa", maintenance: "Manutenção", reboot: "Reiniciar a placa", clear_chat: "Apagar a conversa",
+    tpm: "Limite do provedor, tokens por minuto (0 = desconhecido; ele aprende com um erro 429)", max_tokens: "Máximo de tokens da resposta (menor é melhor em planos grátis)",
+    rgb_pin: "Pino do LED RGB da placa", tz: "Fuso horário (horas em relação ao UTC, ex.: -3 em São Paulo)", model_busy: "modelo ocupado, tentando de novo", maintenance: "Manutenção", reboot: "Reiniciar a placa", clear_chat: "Apagar a conversa",
     security: "Sem senha: qualquer pessoa neste Wi-Fi pode abrir esta página e rodar código na placa.",
     thinking: "pensando…", working: "usando ferramentas…", busy: "A placa ainda está trabalhando no pedido anterior.",
     no_programs: "Nenhum programa ainda. Peça para a placa criar um.", log: "Saída", run_again: "Rodar de novo", autostart: "Iniciar ao ligar",
@@ -237,6 +239,9 @@ function handleEvent(e) {
       if (e.state === "thinking" || e.state === "working") { setBusy(true, e.state); KIPP.set(e.state); }
       else if (e.state === "done") { setBusy(false); KIPP.set("happy", 2500); }
       else if (e.state === "error") { setBusy(false); KIPP.set("error", 4000); }
+      break;
+    case "log":
+      if (busy && stateLine && /^model busy/.test(e.text || "")) stateLine.textContent = t("model_busy") + " · " + e.text.replace(/^model busy /, "");
       break;
     case "program": case "program_output": if (view === "programs") schedulePrograms(); break;
     case "espnow_msg": addInbox(e.sender + ": " + e.text); break;
@@ -480,6 +485,8 @@ async function loadSettings() {
     $("#api-key").value = "";
     $("#api-key").placeholder = cfg.llm_api_key ? cfg.llm_api_key + " · " + t("key_kept") : "";
     $("#model").value = cfg.llm_model || "";
+    $("#tpm").value = cfg.llm_tpm || 0;
+    $("#max-tokens").value = cfg.llm_max_tokens || 1500;
     const ws = $("#wifi-ssid");
     ws.innerHTML = "<option value=''>" + esc(cfg.wifi_ssid ? cfg.wifi_ssid + " " + t("keep_ssid") : "—") + "</option>";
     $("#wifi-pass").value = "";
@@ -487,6 +494,7 @@ async function loadSettings() {
     $("#channel").value = cfg.espnow_channel || 1;
     $("#oled-sda").value = cfg.oled.sda; $("#oled-scl").value = cfg.oled.scl; $("#oled-addr").value = cfg.oled.addr;
     $("#rgb-pin").value = cfg.rgb_led_pin;
+    $("#tz").value = (cfg.tz_offset_min || 0) / 60;
     localHint();
     const st = await api("/api/status");
     $("#about").textContent = "openTARS Self-Programming " + st.version + " · " + Math.round(st.memory.free / 1024) + " KB " + t("free");
@@ -519,10 +527,12 @@ $("#scan").addEventListener("click", async () => {
 });
 async function saveSettings(quiet) {
   const body = {
+    llm_tpm: parseInt($("#tpm").value, 10) || 0, llm_max_tokens: parseInt($("#max-tokens").value, 10) || 1500,
     llm_preset: $("#preset").value, llm_base_url: $("#base-url").value.trim(), llm_model: $("#model").value.trim(),
     name: $("#board-name").value.trim(), espnow_channel: parseInt($("#channel").value, 10) || 1, lang,
     oled: Object.assign({}, cfg.oled || {}, { sda: +$("#oled-sda").value, scl: +$("#oled-scl").value, addr: +$("#oled-addr").value }),
     rgb_led_pin: +$("#rgb-pin").value,
+    tz_offset_min: Math.round((parseFloat($("#tz").value) || 0) * 60),
   };
   if ($("#api-key").value) body.llm_api_key = $("#api-key").value.trim();
   const newWifi = $("#wifi-ssid").value;

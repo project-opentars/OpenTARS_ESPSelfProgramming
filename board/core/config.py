@@ -14,12 +14,14 @@ DEFAULTS = {
     "llm_base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
     "llm_api_key": "",
     "llm_model": "gemini-flash-latest",
-    "llm_max_tokens": 4096,
+    "llm_max_tokens": 1500,     # teto da resposta: a Groq conta este valor como "pedido" na cota por minuto, então menor é melhor
+    "llm_tpm": 0,               # limite de tokens por minuto do provedor (0 = sem limite; aprende sozinho a partir de um erro 429)
     "llm_timeout_s": 120,
     "agent_max_rounds": 12,
     "autostart": [],            # programas que rodam ao ligar: [{"name": ..., "path": ...}]
     "oled": {"sda": 9, "scl": 8, "addr": 60, "width": 128, "height": 64},
     "rgb_led_pin": 48,
+    "tz_offset_min": 0,         # fuso horário em minutos em relação ao UTC (São Paulo = -180)
 }
 
 _cfg = None

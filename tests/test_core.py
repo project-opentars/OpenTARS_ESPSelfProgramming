@@ -168,7 +168,7 @@ async def principal():
     corpo = PEDIDOS[-1]["body"]
     conferir("pedido ao modelo leva as ferramentas e a chave", corpo.get("tools") and PEDIDOS[-1]["auth"] == "Bearer segredo123")
     conferir("extra_content não vai para provedor que não é o Gemini", "extra_content" not in json.dumps(corpo["messages"]), corpo["messages"])
-    conferir("o prompt do sistema cita a placa e a biblioteca", "PROGRAM this board" in corpo["messages"][0]["content"])
+    conferir("o prompt do sistema cita a placa e a biblioteca", "YOU run the code" in corpo["messages"][0]["content"])
     gem = llm.clean_messages(agent.agent.history, "https://generativelanguage.googleapis.com/v1beta/openai")
     conferir("extra_content volta quando o destino é o Gemini", "thought_signature" in json.dumps(gem))
     st, r = await http(porta, "GET", "/api/chat/history")

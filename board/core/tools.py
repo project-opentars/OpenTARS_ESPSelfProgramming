@@ -17,31 +17,28 @@ def _schema(name, desc, props=None, required=()):
 S, I, B = {"type": "string"}, {"type": "integer"}, {"type": "boolean"}
 
 TOOLS = [
-    _schema("run_code", "Run MicroPython code on this board and return what it printed and any error with the line number. "
-            "Use it to test ideas and to do one-off hardware actions. If it is still running after timeout_s it keeps running as a "
-            "background program.", {"code": S, "timeout_s": I}, ["code"]),
-    _schema("start_program", "Start a long-running program in the background (animations, monitors, loops, reacting to buttons or "
-            "ESP-NOW messages). Give code (saved to /programs/<name>.py) or the path of an existing file.",
-            {"name": S, "code": S, "path": S}, ["name"]),
+    _schema("run_code", "Run MicroPython code on this board; returns what it printed or the error with its line. Use it to test and for one-off actions. "
+            "If still running after timeout_s it continues as a background program.", {"code": S, "timeout_s": I}, ["code"]),
+    _schema("start_program", "Run code in the background (animations, monitors, loops, buttons, messages). Replaces a running program of the same name. "
+            "Give code (saved as /programs/<name>.py) or path.", {"name": S, "code": S, "path": S}, ["name"]),
     _schema("stop_program", "Stop a background program by name, or 'all'.", {"name": S}),
-    _schema("list_programs", "List programs with status (running, done, error, stopped) and errors."),
-    _schema("program_log", "Last lines printed by a program (and its error, if any).", {"name": S, "lines": I}, ["name"]),
-    _schema("write_file", "Create or overwrite a text file. Allowed folders: /skills (your reusable library: modules you can import), "
-            "/programs and /data/files.", {"path": S, "content": S}, ["path", "content"]),
-    _schema("read_file", "Read a text file (any folder, including /lib to learn the helpers).", {"path": S}, ["path"]),
+    _schema("list_programs", "Programs with status and errors."),
+    _schema("program_log", "Last printed lines of a program, and its error.", {"name": S, "lines": I}, ["name"]),
+    _schema("write_file", "Create or overwrite a text file in /skills (reusable modules), /programs or /data/files.", {"path": S, "content": S}, ["path", "content"]),
+    _schema("read_file", "Read a text file (any folder, e.g. /lib).", {"path": S}, ["path"]),
     _schema("list_files", "List a folder.", {"path": S}),
     _schema("delete_file", "Delete a file in /skills, /programs or /data/files.", {"path": S}, ["path"]),
-    _schema("remember", "Save a short fact for future conversations (wiring, preferences, what works). It is shown to you every time.",
-            {"note": S}, ["note"]),
-    _schema("set_autostart", "Make a program file start automatically when the board powers on (or stop doing so).",
-            {"path": S, "enabled": B}, ["path", "enabled"]),
-    _schema("board_info", "Board facts: memory, Wi-Fi, IP, ESP-NOW peers, pins in use, running programs, files in /skills."),
-    _schema("espnow_peers", "Other openTARS boards seen over ESP-NOW (name, MAC, signal, last seen)."),
-    _schema("espnow_send", "Send a short text message to another board (by name or MAC) or to 'all'. Programs there receive it.",
-            {"to": S, "text": S}, ["to", "text"]),
-    _schema("espnow_run", "Run MicroPython code on ANOTHER board over ESP-NOW and get what it printed. Same rules as run_code.",
-            {"to": S, "code": S, "timeout_s": I}, ["to", "code"]),
+    _schema("remember", "Save a short durable fact (wiring, preferences). You see all notes every time.", {"note": S}, ["note"]),
+    _schema("set_autostart", "Start a program file at power-on (enabled true) or stop doing so.", {"path": S, "enabled": B}, ["path", "enabled"]),
+    _schema("set_timezone", "Set the user's UTC offset in hours (São Paulo -3, New York -5, Berlin 1) for tars.localtime().", {"hours": {"type": "number"}}, ["hours"]),
+    _schema("board_info", "Memory, Wi-Fi, IP, programs, pins, files in /skills."),
+    _schema("espnow_peers", "Other openTARS boards seen over ESP-NOW."),
+    _schema("espnow_send", "Send a text message to another board (name or MAC) or 'all'.", {"to": S, "text": S}, ["to", "text"]),
+    _schema("espnow_run", "Run MicroPython code on ANOTHER board over ESP-NOW; returns its output.", {"to": S, "code": S, "timeout_s": I}, ["to", "code"]),
 ]
+
+
+NAMES = set(t["function"]["name"] for t in TOOLS)
 
 
 def _writable(path):
@@ -53,6 +50,24 @@ def _writable(path):
 def _clip(text, n=3000):
     text = str(text)
     return text if len(text) <= n else text[:n] + "\n...[%d more characters cut]" % (len(text) - n)
+
+
+def api_summary(txt):
+    """Docstring de um módulo e as linhas de def/class: o suficiente para saber a API sem pagar o arquivo todo em tokens."""
+    lines = txt.split("\n")
+    out, inside = [], False
+    for ln in lines:
+        s = ln.strip()
+        if not out and not inside and s.startswith('"""'):
+            inside = True
+        if inside:
+            out.append(ln)
+            if s.endswith('"""') and len(out) > 1 or (s.count('"""') == 2):
+                inside = False
+            continue
+        if ln.startswith(("def ", "class ")) or ln.startswith("    def ") or (ln[:1].isupper() and " = " in ln.split("(")[0]):
+            out.append(ln.split(":")[0] + ":" if ln.rstrip().endswith(":") else ln[:100])
+    return _clip("\n".join(out) + "\n(summary of the API; the system prompt documents how to use it)", 1500)
 
 
 def notes():
@@ -108,9 +123,13 @@ async def call(name, args):
             compat.write_text(path, args["code"])
         if not path:
             return "error: give code or path"
+        old = programs.get(pname)
+        replaced = bool(old and old.status in ("starting", "running"))
+        if replaced:
+            programs.stop(pname)   # mesmo nome = nova versão: para a velha e começa a nova
         p = programs.start(name=pname, path=path)
         done = await programs.await_done(p, 1500)  # pega erros de sintaxe e falhas logo no começo
-        return _program_report(p) + ("" if done else "\n(running in the background)")
+        return ("(replaced the running '%s')\n" % pname if replaced else "") + _program_report(p) + ("" if done else "\n(running in the background)")
     if name == "stop_program":
         res = programs.stop(args.get("name") or "all")
         msg = "stopped: %s" % (", ".join(res["stopped"]) or "nothing")
@@ -135,8 +154,13 @@ async def call(name, args):
         compat.write_text(path, content)
         return "saved %s (%d bytes)" % (path, len(content))
     if name == "read_file":
-        txt = compat.read_text(args.get("path", ""))
-        return "error: not found" if txt is None else _clip(txt, 6000)
+        path = args.get("path", "")
+        txt = compat.read_text(path if path.startswith("/") else "/" + path)
+        if txt is None:
+            return "error: not found"
+        if (path if path.startswith("/") else "/" + path).startswith("/lib/"):
+            return api_summary(txt)   # os helpers já estão descritos no prompt: devolver o arquivo inteiro só gasta tokens
+        return _clip(txt, 6000)
     if name == "list_files":
         path = args.get("path") or "/"
         try:
@@ -173,6 +197,15 @@ async def call(name, args):
             auto.append({"name": path.rsplit("/", 1)[-1].replace(".py", ""), "path": path})
         config.save({"autostart": auto})
         return "autostart now: " + (", ".join(a["path"] for a in auto) or "nothing")
+    if name == "set_timezone":
+        try:
+            hours = float(args.get("hours"))
+        except (TypeError, ValueError):
+            return "error: hours must be a number, for example -3"
+        if not -12 <= hours <= 14:
+            return "error: hours must be between -12 and 14"
+        config.save({"tz_offset_min": int(round(hours * 60))})
+        return "time zone set to UTC%+g" % hours
     if name == "board_info":
         return json.dumps(board_info())
     if name == "espnow_peers":
@@ -189,12 +222,10 @@ def board_info():
     from . import net
     import sys
     cfg = config.get()
-    try:
-        uname = os.uname()
-        machine = getattr(uname, "machine", "")
-    except AttributeError:
-        machine = sys.platform
-    return {"machine": machine, "micropython": sys.version, "memory": compat.mem_info(), "network": net.status(),
-            "peers": len(net.peers_info()), "programs": programs.all_info(),
+    st = net.status()
+    return {"memory_free_kb": compat.mem_info()["free"] // 1024, "mode": st.get("mode"), "ssid": st.get("ssid"), "ip": st.get("ip"),
+            "name": st.get("name"), "channel": st.get("channel"), "peers": len(net.peers_info()),
+            "running": [p["name"] for p in programs.all_info() if p["status"] == "running"],
             "skills": [n for n, _ in skills_index()], "oled": cfg.get("oled"), "rgb_led_pin": cfg.get("rgb_led_pin"),
-            "autostart": cfg.get("autostart")}
+            "utc_offset_min": cfg.get("tz_offset_min", 0), "autostart": [a.get("path") for a in cfg.get("autostart", [])],
+            "machine": getattr(os.uname(), "machine", sys.platform) if hasattr(os, "uname") else sys.platform}

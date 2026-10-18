@@ -52,6 +52,13 @@ phone / browser ──HTTP──▶ board (MicroPython)
 
 Every board announces itself every 10 s. Boards on your Wi-Fi use the router's channel; boards without Wi-Fi use the channel set in Settings, so set it to the router's channel (shown in the **Boards** tab). Messages and remote code are split into 240-byte frames, so they can be up to ~60 KB.
 
+## Troubleshooting
+
+- **HTTP 429 (rate limit).** Free plans (Groq, Gemini) limit tokens per minute, and every tool round resends the conversation. The board waits for the time the provider asks (`Retry-After`) and retries up to three times; if it still fails, wait a minute or pick a larger plan or another model.
+- **A small model pastes code instead of running it.** The agent notices a code block without any tool call and asks the model to run it (twice at most). If a model keeps doing it, pick a larger one (for example `gpt-oss-120b` instead of `gpt-oss-20b`).
+- **Wrong time.** The clock is synced by NTP at boot and is UTC. Set your time zone in **Settings** (UTC offset in hours) or just tell the agent where you live.
+- **Opening the USB serial port restarts the board** (ESP32-S3 native USB). That is normal; the page shows the boot reason in `/api/status` and the last 30 boots are in `/data/boot.log`.
+
 ## Security
 
 There is **no password**: anyone on the same Wi-Fi can open the page and run code on the board, and ESP-NOW traffic is not encrypted. Use it on a network you trust. HTTPS certificates are **not verified** on the board (MicroPython has no CA bundle here). Your API key is stored on the board in `/data/config.json`.
@@ -59,6 +66,7 @@ There is **no password**: anyone on the same Wi-Fi can open the page and run cod
 ## Development
 
 - `python3 tests/test_core.py` runs the core on your computer: web server, HTTP client, agent with a fake model, threads, tools and two simulated ESP-NOW boards.
+- `python3 tests/test_robust.py` covers weak-model behaviour: code pasted instead of run, malformed tool calls, rate limits, retries, clock and time zone.
 - `mpremote connect /dev/ttyACM0 run tests/smoke_board.py` runs a smoke test on the real board (fake model, threads, OLED, LED).
 - `python3 tools/dev_server.py` serves the page and API on your computer with a fake model, to work on the interface.
 - `python3 tools/build_web.py` compresses `web/` into `board/www/` (the deploy script does this for you).
