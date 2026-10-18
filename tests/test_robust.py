@@ -284,6 +284,26 @@ async def principal():
     conferir("429 mesmo com ritmo baixa o limite em 10 %", config.get()["llm_tpm"] == 6120, config.get()["llm_tpm"])
     config.save({"llm_tpm": 0})
 
+    # 17) erro de conexão legível, com a dica de modelo local
+    config.save({"llm_base_url": "http://127.0.0.1:1/v1"})
+    evs = await pedido(ag, "teste de conexão")
+    err = [e["text"] for e in evs if e["kind"] == "error"]
+    conferir("conexão recusada diz com quem tentou falar e como resolver (modelo local)",
+             err and "could not connect to 127.0.0.1:1" in err[0] and "OLLAMA_HOST" in err[0] and "Errno" in err[0], err)
+    try:
+        await llm.list_models(config.get())
+        conferir("list_models com endereço inalcançável dá erro claro", False, "sem erro")
+    except llm.LLMError as e:
+        conferir("list_models com endereço inalcançável dá erro claro", "could not connect" in str(e), str(e))
+    config.save({"llm_base_url": ""})
+    try:
+        await llm.list_models(config.get())
+        conferir("list_models sem endereço pede o endereço", False, "sem erro")
+    except llm.LLMError as e:
+        conferir("list_models sem endereço pede o endereço", "no address yet" in str(e), str(e))
+    conferir("presets locais não têm IP inventado", llm.PRESETS["ollama"]["base_url"] == "" and llm.PRESETS["ollama"]["example"].startswith("http://"), llm.PRESETS["ollama"])
+    config.save({"llm_base_url": "http://127.0.0.1:%d/v1" % porta})
+
     srv.close()
 
 

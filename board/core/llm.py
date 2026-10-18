@@ -2,9 +2,9 @@
 import json
 from . import http_client
 
-PRESETS = {
-    "ollama": {"base_url": "http://192.168.0.10:11434/v1", "model": "qwen3:4b", "needs_key": False},
-    "lmstudio": {"base_url": "http://192.168.0.10:1234/v1", "model": "", "needs_key": False},
+PRESETS = {   # ollama e lmstudio: o endereço é o IP do computador da pessoa, que eu não sei: a página deixa o campo vazio com um exemplo
+    "ollama": {"base_url": "", "example": "http://192.168.1.20:11434/v1", "model": "qwen3:4b", "needs_key": False},
+    "lmstudio": {"base_url": "", "example": "http://192.168.1.20:1234/v1", "model": "", "needs_key": False},
     "gemini": {"base_url": "https://generativelanguage.googleapis.com/v1beta/openai", "model": "gemini-flash-latest", "needs_key": True},
     "openai": {"base_url": "https://api.openai.com/v1", "model": "gpt-4.1-mini", "needs_key": True},
     "groq": {"base_url": "https://api.groq.com/openai/v1", "model": "openai/gpt-oss-20b", "needs_key": True},
@@ -22,6 +22,19 @@ WAIT_SCALE = 1.0        # os testes diminuem isto para não esperar de verdade
 
 class LLMError(Exception):
     pass
+
+
+def _is_lan(url):
+    h = url.split("://", 1)[-1].split("/", 1)[0].split(":")[0]
+    return h in ("localhost", "127.0.0.1") or h.startswith(("192.168.", "10.", "172.")) or h.endswith(".local")
+
+
+def explain_connect(base, err):
+    msg = str(err)
+    if "could not connect" in msg and _is_lan(base):
+        msg += (". If the model runs on your computer: the address must be the computer's IP on this Wi-Fi (not localhost), and Ollama must "
+                "listen on the network (OLLAMA_HOST=0.0.0.0, then restart Ollama).")
+    return msg
 
 
 def retry_wait(headers, text, attempt):
@@ -138,6 +151,13 @@ async def chat(cfg, messages, tools=None):
     body = {"model": cfg["llm_model"], "messages": clean_messages(messages, base), "max_tokens": cfg.get("llm_max_tokens", 4096)}
     if tools:
         body["tools"] = tools
+    try:
+        return await _chat(cfg, base, body)
+    except http_client.HTTPError as e:
+        raise LLMError(explain_connect(base, e))
+
+
+async def _chat(cfg, base, body):
     payload = json.dumps(body, separators=(",", ":"))  # compacto: menos bytes e menos tokens contados por alguns provedores
     attempt = 0
     from . import compat, config, events
@@ -199,7 +219,12 @@ async def chat(cfg, messages, tools=None):
 
 async def list_models(cfg):
     base = cfg["llm_base_url"].rstrip("/")
-    status, _, data = await http_client.request("GET", base + "/models", _headers(cfg), None, 20)
+    if not base:
+        raise LLMError("no address yet: fill in the Address field first")
+    try:
+        status, _, data = await http_client.request("GET", base + "/models", _headers(cfg), None, 20)
+    except http_client.HTTPError as e:
+        raise LLMError(explain_connect(base, e))
     if status != 200:
         raise LLMError("HTTP %d: %s" % (status, data[:200].decode("utf-8", "replace") if data else ""))
     items = json.loads(data).get("data", [])

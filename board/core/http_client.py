@@ -91,3 +91,6 @@ async def request(method, url, headers=None, body=None, timeout_s=60):
         return await asyncio.wait_for(_do(method, url, headers, body), timeout_s)
     except asyncio.TimeoutError:
         raise HTTPError("timed out after %d s" % timeout_s)
+    except OSError as e:  # [Errno 113] ECONNABORTED, 111 ECONNREFUSED, 110 ETIMEDOUT, DNS...: diz com quem tentou falar
+        _, host, port, _, _ = split_url(url)
+        raise HTTPError("could not connect to %s:%d (%s)" % (host, port, e))

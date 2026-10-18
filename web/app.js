@@ -19,7 +19,7 @@ const I18N = {
     espnow_hint: "Boards find each other by themselves when they are on the same Wi-Fi channel. Boards on your Wi-Fi use the router's channel; boards without Wi-Fi use the channel set in Settings.",
     to: "To", message: "Message or code", send_text: "Send as text", run_there: "Run there", received: "Received",
     model: "Model", provider: "Provider", custom: "Other (OpenAI-compatible)",
-    ollama_hint: "The model runs on your computer. Ollama must accept connections from the network (OLLAMA_HOST=0.0.0.0) and the address below must use your computer's IP.",
+    ollama_hint: "The model runs on your computer. Type your computer's IP on this Wi-Fi in the address below (not localhost), and make Ollama listen on the network: OLLAMA_HOST=0.0.0.0, then restart Ollama.",
     base_url: "Address", api_key: "API key", model_name: "Model name", load_models: "List models", scan: "Scan", password: "Password",
     board: "Board", board_name: "Name on the network", channel: "ESP-NOW channel when there is no Wi-Fi", oled_pins: "OLED screen (I2C)",
     tpm: "Provider limit, tokens per minute (0 = unknown; it learns it from a 429)", max_tokens: "Max reply tokens (lower is kinder to free plans)",
@@ -46,7 +46,7 @@ const I18N = {
     espnow_hint: "As placas se encontram sozinhas quando estão no mesmo canal de Wi-Fi. As que estão no seu Wi-Fi usam o canal do roteador; as sem Wi-Fi usam o canal definido em Ajustes.",
     to: "Para", message: "Mensagem ou código", send_text: "Enviar como texto", run_there: "Rodar lá", received: "Recebidas",
     model: "Modelo", provider: "Provedor", custom: "Outro (compatível com OpenAI)",
-    ollama_hint: "O modelo roda no seu computador. O Ollama precisa aceitar conexões da rede (OLLAMA_HOST=0.0.0.0) e o endereço abaixo precisa usar o IP do computador.",
+    ollama_hint: "O modelo roda no seu computador. Digite abaixo o IP do computador neste Wi-Fi (não localhost) e faça o Ollama escutar na rede: OLLAMA_HOST=0.0.0.0 e reinicie o Ollama.",
     base_url: "Endereço", api_key: "Chave da API", model_name: "Nome do modelo", load_models: "Listar modelos", scan: "Procurar", password: "Senha",
     board: "Placa", board_name: "Nome na rede", channel: "Canal do ESP-NOW quando não há Wi-Fi", oled_pins: "Tela OLED (I2C)",
     tpm: "Limite do provedor, tokens por minuto (0 = desconhecido; ele aprende com um erro 429)", max_tokens: "Máximo de tokens da resposta (menor é melhor em planos grátis)",
@@ -500,11 +500,18 @@ async function loadSettings() {
     $("#about").textContent = "openTARS Self-Programming " + st.version + " · " + Math.round(st.memory.free / 1024) + " KB " + t("free");
   } catch (e) { $("#save-msg").textContent = e.message; }
 }
-function localHint() { $("#local-hint").hidden = !["ollama", "lmstudio"].includes($("#preset").value); }
+function localHint() {
+  const local = ["ollama", "lmstudio"].includes($("#preset").value);
+  $("#local-hint").hidden = !local;
+  $$("#tpm, #max-tokens, label[for=tpm], label[for=max-tokens]").forEach((el) => { el.hidden = local; });  // limites de cota não existem em modelo local
+  const p = presets[$("#preset").value];
+  $("#base-url").placeholder = local && p && p.example ? p.example : "https://…";
+}
 $("#preset").addEventListener("change", () => {
   const p = presets[$("#preset").value];
   if (p && $("#preset").value !== "custom") { $("#base-url").value = p.base_url; $("#model").value = p.model; }
   localHint();
+  if (p && !p.base_url && p.example) $("#base-url").focus();   // local: a pessoa precisa digitar o IP do computador
 });
 $("#load-models").addEventListener("click", async () => {
   const msg = $("#models-msg");
