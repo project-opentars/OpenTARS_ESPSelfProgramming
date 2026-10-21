@@ -43,7 +43,7 @@ def tool(board, name, pairs):
     for p in pairs:
         k, _, v = p.partition("=")
         args[k] = int(v) if re.fullmatch(r"-?\d+", v) else float(v) if re.fullmatch(r"-?\d+\.\d+", v) else {"true": True, "false": False}.get(v, v)
-    if not sys.stdin.isatty():
+    if name in ("run_code", "start_program", "write_file") and not sys.stdin.isatty():   # só estas leem stdin: um pipe aberto e mudo travaria as outras
         text = sys.stdin.read()
         if text.strip():
             args["content" if name == "write_file" else "code"] = text
