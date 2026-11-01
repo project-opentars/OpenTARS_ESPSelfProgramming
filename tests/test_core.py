@@ -204,6 +204,16 @@ async def principal():
     r = await tools.call("set_autostart", {"path": "/skills/soma.py", "enabled": True})
     conferir("autostart registra o arquivo", "/skills/soma.py" in r and config.get()["autostart"][0]["path"] == "/skills/soma.py", r)
 
+    # --- modo Linux (SBC): run_shell, guia e rede do sistema ---
+    r = await tools.call("run_shell", {"command": "echo ola; exit 3"})
+    conferir("run_shell devolve saída e código", r.startswith("exit 3") and "ola" in r, r)
+    r = await tools.call("run_shell", {"command": "sleep 5", "timeout_s": 1})
+    conferir("run_shell para o comando que passa do tempo", "still running" in r, r)
+    conferir("guia de Linux cita run_shell e não a placa ESP32", "run_shell" in agent.agent.guide() and "Linux computer" in agent.agent.guide())
+    net._st.clear()
+    await net.start_wifi()
+    conferir("no Linux a rede é a do sistema (modo linux, IP real)", net.status()["mode"] == "linux" and net.status()["ip"], net.status())
+
     # --- API de arquivos ---
     st, r = await http(porta, "POST", "/api/file?path=/programs/teste.py", "print('oi')")
     st2, txt = await http(porta, "GET", "/api/file?path=/programs/teste.py", raw=True)

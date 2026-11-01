@@ -53,13 +53,26 @@ def peers_info():
 
 
 # ---------------- Wi-Fi ----------------
+def _lan_ip(socket):
+    """IP desta máquina na rede local (o UDP "conectado" não envia nada; só escolhe a interface de saída)."""
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(("10.255.255.255", 1))
+        return s.getsockname()[0]
+    except OSError:
+        return "127.0.0.1"
+    finally:
+        s.close()
+
+
 async def start_wifi():
     global _wlan
     cfg = config.get()
     try:
         import network
-    except ImportError:  # CPython (testes): finge uma rede local
-        _st.update({"mode": "sim", "ip": "127.0.0.1", "name": cfg.get("name") or "opentars-sim", "mac": "00:00:00:00:00:00"})
+    except ImportError:  # Linux (Raspberry Pi e outros SBCs, ou um PC): a rede é do sistema
+        import socket
+        _st.update({"mode": "linux", "ip": _lan_ip(socket), "name": cfg.get("name") or socket.gethostname(), "mac": ""})
         return
     sta = network.WLAN(network.STA_IF)
     sta.active(True)

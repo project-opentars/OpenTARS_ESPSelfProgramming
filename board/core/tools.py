@@ -38,6 +38,11 @@ TOOLS = [
 ]
 
 
+if not compat.MICRO:   # Linux (SBC ou PC): a IA também usa o sistema
+    TOOLS.append(_schema("run_shell", "Run a shell command on this Linux computer, as the user that runs openTARS (no sudo unless it was set up). "
+                         "Returns the exit code and the output. Use it for system info, packages, services, files, i2cdetect, pinctrl, gpioinfo.",
+                         {"command": S, "timeout_s": I}, ["command"]))
+
 NAMES = set(t["function"]["name"] for t in TOOLS)
 
 
@@ -212,6 +217,19 @@ async def call(name, args):
         return json.dumps(net.peers_info()) if net.peers_info() else "no other boards seen yet"
     if name == "espnow_send":
         return await net.send_text(args.get("to", ""), args.get("text", ""))
+    if name == "run_shell" and not compat.MICRO:
+        import asyncio
+        if not (args.get("command") or "").strip():
+            return "error: give the command"
+        timeout = max(1, min(int(args.get("timeout_s") or 30), 300))
+        p = await asyncio.create_subprocess_shell(args.get("command", ""), stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
+        try:
+            out, _ = await asyncio.wait_for(p.communicate(), timeout)
+        except asyncio.TimeoutError:
+            p.kill()
+            await p.wait()
+            return "error: still running after %d s, stopped it" % timeout
+        return _clip("exit %d\n%s" % (p.returncode, out.decode("utf-8", "replace")))
     if name == "espnow_run":
         timeout = max(2, min(int(args.get("timeout_s") or 15), 120))
         return _clip(await net.remote_run(args.get("to", ""), args.get("code", ""), timeout))
@@ -228,4 +246,16 @@ def board_info():
             "running": [p["name"] for p in programs.all_info() if p["status"] == "running"],
             "skills": [n for n, _ in skills_index()], "oled": cfg.get("oled"), "rgb_led_pin": cfg.get("rgb_led_pin"),
             "utc_offset_min": cfg.get("tz_offset_min", 0), "autostart": [a.get("path") for a in cfg.get("autostart", [])],
-            "machine": getattr(os.uname(), "machine", sys.platform) if hasattr(os, "uname") else sys.platform}
+            "machine": _machine()}
+
+
+def _machine():
+    """Nome da placa: no Linux dos SBCs vem da device tree ("Raspberry Pi 5 Model B", "Orange Pi 5"); senão a arquitetura."""
+    import sys
+    if not compat.MICRO:
+        try:
+            with open("/proc/device-tree/model") as f:
+                return f.read().strip("\x00\n ") + " (Linux)"
+        except OSError:
+            pass
+    return getattr(os.uname(), "machine", sys.platform) if hasattr(os, "uname") else sys.platform

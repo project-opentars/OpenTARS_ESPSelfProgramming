@@ -28,6 +28,9 @@ Code or file content goes on standard input:
   python3 {me} tool {board} write_file path=/skills/x.py <<'PY'
   ...
   PY
+  python3 {me} tool {board} run_shell <<'SH'      (Linux boards only)
+  uname -a
+  SH
 Other tools only take key=value: python3 {me} tool {board} stop_program name=all
 """
 
@@ -43,10 +46,11 @@ def tool(board, name, pairs):
     for p in pairs:
         k, _, v = p.partition("=")
         args[k] = int(v) if re.fullmatch(r"-?\d+", v) else float(v) if re.fullmatch(r"-?\d+\.\d+", v) else {"true": True, "false": False}.get(v, v)
-    if name in ("run_code", "start_program", "write_file") and not sys.stdin.isatty():   # só estas leem stdin: um pipe aberto e mudo travaria as outras
+    key = {"run_code": "code", "start_program": "code", "write_file": "content", "run_shell": "command"}.get(name)
+    if key and key not in args and not sys.stdin.isatty():   # só estas leem stdin: um pipe aberto e mudo travaria as outras
         text = sys.stdin.read()
         if text.strip():
-            args["content" if name == "write_file" else "code"] = text
+            args[key] = text
     print(post(board + "/api/tool", {"name": name, "args": args}, 140).get("result") or "(no result)")
 
 

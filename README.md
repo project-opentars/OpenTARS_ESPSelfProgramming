@@ -22,6 +22,20 @@ You open the board's web page and say "make the LED breathe" or "show a spinning
    Next time just run `python3 bridge.py`: it remembers the board.
 5. Chat. Under **Settings** you can pick which AI program to use and a model name (empty = the program's default).
 
+## Raspberry Pi, Orange Pi and other Linux boards
+
+The same system runs on any Linux single-board computer (Raspberry Pi, Orange Pi, Rock, Banana Pi, Jetson...) or any Linux PC, with Python 3.8+ and nothing else to install. There the AI also works with Linux itself: it runs Python 3 programs and **shell commands** (`run_shell`), and uses the GPIO and I2C tools and libraries that are installed.
+
+```
+git clone https://github.com/project-opentars/OpenTARS_ESPSelfProgramming
+cd OpenTARS_ESPSelfProgramming
+sbc/install.sh
+```
+
+It installs a systemd **user** service (no sudo), on port 8080, and prints the address. Open it on your phone, copy the connect command and run it on a computer with an AI program; that can be the board itself, if the AI program runs there. Without systemd: `python3 sbc/opentars_sbc.py`. Remove: `sbc/install.sh --remove` (your data stays in `~/.local/share/opentars-sp`). Settings: `OPENTARS_PORT`, `OPENTARS_HOME`.
+
+The AI runs commands as your user, without sudo, and is told not to install system packages or run destructive commands. **There is no password: anyone on your network who opens the page can run commands on that computer as your user.** Use it only on a network you trust.
+
 ## How it works
 
 ```
@@ -39,7 +53,7 @@ Programs must call `delay(ms)` inside loops; that is how they can be stopped. Th
 
 ## Status
 
-Early release. On one ESP32-S3 (8 MB octal PSRAM, 16 MB flash) with real AI programs: **Claude Code, Codex, OpenCode and Grok Build** each ran a request end to end (page → bridge → AI program → code on the board). **Pi** starts correctly but was not logged in on the test machine, so it was not run to the end. **Ollama is not supported**: it only answers text and cannot act on the board by itself. ESP-NOW has only been tested with simulated boards. Only Linux was tried for the bridge; it uses nothing Linux-specific, but macOS/Windows are untested.
+Early release. On one ESP32-S3 (8 MB octal PSRAM, 16 MB flash) with real AI programs: **Claude Code, Codex, OpenCode and Grok Build** each ran a request end to end (page → bridge → AI program → code on the board). **Pi** starts correctly but was not logged in on the test machine, so it was not run to the end. **Ollama is not supported**: it only answers text and cannot act on the board by itself. ESP-NOW has only been tested with simulated boards. **Linux boards:** tested only on an x86-64 Linux PC standing in for one (same Python code, end to end with Claude Code and `run_shell`); not yet run on a real Raspberry Pi, Orange Pi or other ARM board, and `sbc/install.sh` was not run on a real board. Only Linux was tried for the bridge; it uses nothing Linux-specific, but macOS/Windows are untested.
 
 ## Security
 

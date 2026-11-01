@@ -84,11 +84,12 @@ async def main():
     st = net.status()
     hw.led(0, 40, 0) if st["mode"] == "sta" else hw.led(40, 25, 0)
     hw.show_boot_info(st)
-    await api.make_server().start(port=80)
+    await api.make_server().start(port=getattr(compat, "PORT", 80))   # no Linux sem root: sbc/opentars_sbc.py põe 8080
     asyncio.create_task(ntp_loop())
     asyncio.create_task(journal_loop())
-    events.emit("log", text="ready at http://%s (%s)" % (st["ip"], st["mode"]))
-    print("openTARS Self-Programming ready: http://%s  mode=%s  name=%s" % (st["ip"], st["mode"], st["name"]))
+    addr = st["ip"] + ("" if getattr(compat, "PORT", 80) == 80 else ":%d" % compat.PORT)
+    events.emit("log", text="ready at http://%s (%s)" % (addr, st["mode"]))
+    print("openTARS Self-Programming ready: http://%s  mode=%s  name=%s" % (addr, st["mode"], st["name"]))
     if safe:
         events.emit("log", text="safe mode: autostart programs skipped (BOOT held at power-on)")
     else:

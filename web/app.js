@@ -68,7 +68,7 @@ Object.assign(I18N.en, {
   computer: "Computer", harness: "AI program", harness_model: "Model (optional)", auto_pick: "Automatic",
   bridge_off: "No computer connected", bridge_on: "Connected", bridge_hint: "On the computer that has an AI program installed (claude, codex, opencode, pi or grok), open a terminal and paste:",
   wifi_first: "First put the board on your Wi-Fi: Settings, Wi-Fi. Then come back here.", wifi_network: "Network", wifi_connect: "Connect",
-  wifi_own: "The board's own network (no internet)", wifi_lost: "Wi-Fi not connected", wifi_trying: "Connecting…",
+  wifi_own: "The board's own network (no internet)", wifi_lost: "Wi-Fi not connected", wifi_linux: "Network managed by Linux", wifi_trying: "Connecting…",
   wifi_ok: "Connected. New address: %s. Put your phone back on that Wi-Fi and open it.",
 });
 Object.assign(I18N.pt, {
@@ -77,7 +77,7 @@ Object.assign(I18N.pt, {
   computer: "Computador", harness: "Programa de IA", harness_model: "Modelo (opcional)", auto_pick: "Automático",
   bridge_off: "Nenhum computador conectado", bridge_on: "Conectado", bridge_hint: "No computador que tem um programa de IA instalado (claude, codex, opencode, pi ou grok), abra um terminal e cole:",
   wifi_first: "Primeiro ponha a placa no seu Wi-Fi: Ajustes, Wi-Fi. Depois volte aqui.", wifi_network: "Rede", wifi_connect: "Conectar",
-  wifi_own: "Rede própria da placa (sem internet)", wifi_lost: "Wi-Fi desconectado", wifi_trying: "Conectando…",
+  wifi_own: "Rede própria da placa (sem internet)", wifi_lost: "Wi-Fi desconectado", wifi_linux: "Rede gerenciada pelo Linux", wifi_trying: "Conectando…",
   wifi_ok: "Conectado. Novo endereço: %s. Volte o celular para esse Wi-Fi e abra-o.",
 });
 let lang = (() => {
@@ -519,7 +519,9 @@ async function loadSettings() {
     $("#bridge-hint").textContent = "";
     $("#harness").innerHTML = "<option value=''>" + esc(t("auto_pick")) + "</option>" + b.available.map((h) => "<option>" + esc(h) + "</option>").join("");
     $("#harness").value = cfg.harness || "";
-    $("#wifi-now").textContent = n.mode === "sta" ? n.ssid : n.mode === "ap" ? t("wifi_own") : t("wifi_lost");
+    $("#wifi-now").textContent = n.mode === "sta" ? n.ssid : n.mode === "ap" ? t("wifi_own") : n.mode === "linux" ? t("wifi_linux") : t("wifi_lost");
+    // no Linux a rede é do sistema: sem formulário de Wi-Fi
+    [$("#wifi-ssid").parentNode, $("#wifi-go").parentNode, $("#wifi-pass"), $("label[for=wifi-ssid]"), $("label[for=wifi-pass]")].forEach((el) => { el.hidden = n.mode === "linux"; });
     $("#wifi-now-ip").textContent = n.ip ? "http://" + n.ip + (n.name ? " · http://" + n.name + ".local" : "") : "";
     $("#about").textContent = "openTARS Self-Programming " + st.version + " · " + Math.round(st.memory.free / 1024) + " KB " + t("free");
   } catch (e) { $("#save-msg").textContent = e.message; }
