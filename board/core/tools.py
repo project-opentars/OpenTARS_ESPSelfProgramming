@@ -246,7 +246,18 @@ def board_info():
             "running": [p["name"] for p in programs.all_info() if p["status"] == "running"],
             "skills": [n for n, _ in skills_index()], "oled": cfg.get("oled"), "rgb_led_pin": cfg.get("rgb_led_pin"),
             "utc_offset_min": cfg.get("tz_offset_min", 0), "autostart": [a.get("path") for a in cfg.get("autostart", [])],
-            "machine": _machine()}
+            "machine": _machine(), **_linux_hw()}
+
+
+def _linux_hw():
+    """No Linux: temperatura, memória, chips de GPIO, barramentos I2C e se este usuário pode usá-los (sbc.info())."""
+    if compat.MICRO:
+        return {}
+    try:
+        import sbc
+        return {"linux": sbc.info()}
+    except Exception as e:
+        return {"linux": "error: %s" % e}
 
 
 def _machine():

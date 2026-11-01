@@ -8,7 +8,7 @@ Você abre a página da placa no celular e pede algo ("faça o LED respirar"). U
 3. A página mostra um comando: cole-o num terminal **no computador que tem o programa de IA instalado e logado** e deixe aberto. Depois é só `python3 bridge.py`.
 
 ## Raspberry Pi, Orange Pi e outros SBCs com Linux
-O mesmo sistema roda em qualquer SBC com Linux (ou PC), só com Python 3.8+. Lá a IA também trabalha com o Linux: roda programas Python e **comandos do shell** (`run_shell`). `git clone https://github.com/project-opentars/OpenTARS_ESPSelfProgramming`, `cd` na pasta e `sbc/install.sh` (serviço do usuário, sem sudo, porta 8080). **Sem senha: quem estiver na mesma rede roda comandos no computador com o seu usuário.** Testado só num PC Linux x86 fazendo papel de SBC, ainda não numa placa ARM de verdade.
+O mesmo sistema roda em qualquer SBC com Linux (ou PC), só com Python 3.8+. Lá a IA também trabalha com o Linux: roda programas Python e **comandos do shell** (`run_shell`). `git clone https://github.com/project-opentars/OpenTARS_ESPSelfProgramming`, `cd` na pasta e `sbc/install.sh` (serviço do usuário, sem sudo, porta 8080). GPIO e I2C: `sbc/install.sh --hardware` uma vez (usa sudo) e reiniciar; os programas usam `import sbc` (`sbc.Pin("PC5", out=True).on()`, `sbc.info()`). **Sem senha: quem estiver na mesma rede roda comandos no computador com o seu usuário.** Testado só num PC Linux x86 fazendo papel de SBC, ainda não numa placa ARM de verdade.
 
 **Estado:** testado em uma placa ESP32-S3 com Claude Code, Codex, OpenCode e Grok Build (ponta a ponta). O Pi não estava logado na máquina de teste. Ollama não é suportado (só responde texto). ESP-NOW só testado com placas simuladas. A ponte só foi testada no Linux.
 

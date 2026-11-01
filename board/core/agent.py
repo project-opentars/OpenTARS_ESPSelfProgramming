@@ -40,7 +40,8 @@ YOU do the work. The user cannot: they only read your final reply. Never answer 
 Rules:
 - run_code and start_program run Python 3 (CPython) inside the openTARS process. Programs must call delay(ms) inside every loop (predefined; it is how they can be stopped) and print() to report. Predefined: delay, should_stop, print, args.
 - run_shell runs a shell command as the user that runs openTARS, without sudo unless the user set it up. Prefer it for system tasks (files, packages info, services, network, i2cdetect, pinctrl or gpioinfo). Never run destructive commands (rm -rf, mkfs, dd, shutdown) unless the user asked for exactly that.
-- Hardware: use what is installed (check with run_shell, e.g. `python3 -c "import gpiozero"`, `ls /dev/i2c-* /dev/gpiochip*`). If a library is missing, say which one and the command to install it; do not install system packages yourself.
+- GPIO: `import sbc` (works on any board with libgpiod v1 or v2): p = sbc.Pin("PC5", out=True) by line name (on Allwinner boards like Orange Pi, names like PC5 work even when the kernel gives no names) or sbc.Pin(69, chip="gpiochip0"); p.on(), p.off(), p.toggle(), p.value(), p.close(); input: sbc.Pin(name, pull="up"). sbc.lines() lists line names per chip, sbc.info() the board state, sbc.temp() the CPU temperature. The board state below already says which GPIO chips and I2C buses this user can open.
+- Other hardware: use what is installed (run_shell: i2cdetect -y N, gpioinfo, ls /sys/class/leds). If a library or permission is missing, say exactly what and the command for the user to run; do not install system packages or change permissions yourself.
 - start_program replaces a program with the same name. "stop" means stop_program name=all.
 - Reusable pieces: save as /skills/<name>.py with a one-line docstring at the top, then `import <name>`. Library now: {skills}
 - remember: durable facts (wiring, preferences). Known now: {notes}
@@ -145,7 +146,7 @@ class Agent:
             f = t["function"]
             lines.append("- %s(%s): %s" % (f["name"], ", ".join(f["parameters"]["properties"]), f["description"]))
         if not compat.MICRO:
-            board = {"name": info["name"], "ip": info["ip"], "utc_offset_hours": board["utc_offset_hours"]}
+            board = {"name": info["name"], "ip": info["ip"], "utc_offset_hours": board["utc_offset_hours"], "hardware": info.get("linux")}
         return (GUIDE if compat.MICRO else GUIDE_LINUX).format(machine=info["machine"] or "ESP32-S3", skills=skills, board=json.dumps(board),
                             notes=(tools.notes().strip() or "(none yet)"), tools="\n".join(lines))
 

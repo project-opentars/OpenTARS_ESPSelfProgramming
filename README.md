@@ -34,6 +34,16 @@ sbc/install.sh
 
 It installs a systemd **user** service (no sudo), on port 8080, and prints the address. Open it on your phone, copy the connect command and run it on a computer with an AI program; that can be the board itself, if the AI program runs there. Without systemd: `python3 sbc/opentars_sbc.py`. Remove: `sbc/install.sh --remove` (your data stays in `~/.local/share/opentars-sp`). Settings: `OPENTARS_PORT`, `OPENTARS_HOME`.
 
+**GPIO and I2C:** run `sbc/install.sh --hardware` once (it uses sudo: installs `python3-libgpiod`, `gpiod` and `i2c-tools`, lets the groups `gpio` and `i2c` use the devices through a udev rule, adds you to them) and reboot. Programs then use the `sbc` helper, which works with libgpiod v1 (Debian 12) and v2:
+
+```python
+import sbc
+led = sbc.Pin("PC5", out=True)   # by line name; on Allwinner boards (Orange Pi) PC5 works even when the kernel names no lines
+led.toggle()
+button = sbc.Pin("PC6", pull="up"); button.value()
+sbc.info()                       # model, temperature, memory, disk, GPIO chips and I2C buses this user can open
+```
+
 The AI runs commands as your user, without sudo, and is told not to install system packages or run destructive commands. **There is no password: anyone on your network who opens the page can run commands on that computer as your user.** Use it only on a network you trust.
 
 ## How it works
@@ -53,7 +63,7 @@ Programs must call `delay(ms)` inside loops; that is how they can be stopped. Th
 
 ## Status
 
-Early release. On one ESP32-S3 (8 MB octal PSRAM, 16 MB flash) with real AI programs: **Claude Code, Codex, OpenCode and Grok Build** each ran a request end to end (page → bridge → AI program → code on the board). **Pi** starts correctly but was not logged in on the test machine, so it was not run to the end. **Ollama is not supported**: it only answers text and cannot act on the board by itself. ESP-NOW has only been tested with simulated boards. **Linux boards:** tested only on an x86-64 Linux PC standing in for one (same Python code, end to end with Claude Code and `run_shell`); not yet run on a real Raspberry Pi, Orange Pi or other ARM board, and `sbc/install.sh` was not run on a real board. Only Linux was tried for the bridge; it uses nothing Linux-specific, but macOS/Windows are untested.
+Early release. On one ESP32-S3 (8 MB octal PSRAM, 16 MB flash) with real AI programs: **Claude Code, Codex, OpenCode and Grok Build** each ran a request end to end (page → bridge → AI program → code on the board). **Pi** starts correctly but was not logged in on the test machine, so it was not run to the end. **Ollama is not supported**: it only answers text and cannot act on the board by itself. ESP-NOW has only been tested with simulated boards. **Linux boards:** tested only on an x86-64 Linux PC standing in for one (same Python code, end to end with Claude Code and `run_shell`); not yet run on a real Raspberry Pi, Orange Pi or other ARM board, and `sbc/install.sh` was not run on a real board. The `sbc` GPIO helper was checked against the real libgpiod v2 API (and the v1.6 source) and with simulated chips, but never switched a real pin. Only Linux was tried for the bridge; it uses nothing Linux-specific, but macOS/Windows are untested.
 
 ## Security
 
