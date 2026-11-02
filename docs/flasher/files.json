@@ -1,0 +1,110 @@
+[
+{
+"path": "boot.py",
+"size": 38
+},
+{
+"path": "main.py",
+"size": 4121
+},
+{
+"path": "core/__init__.py",
+"size": 0
+},
+{
+"path": "core/agent.py",
+"size": 14089
+},
+{
+"path": "core/api.py",
+"size": 8839
+},
+{
+"path": "core/compat.py",
+"size": 2289
+},
+{
+"path": "core/config.py",
+"size": 4555
+},
+{
+"path": "core/events.py",
+"size": 718
+},
+{
+"path": "core/hw.py",
+"size": 1806
+},
+{
+"path": "core/net.py",
+"size": 15633
+},
+{
+"path": "core/programs.py",
+"size": 5562
+},
+{
+"path": "core/tools.py",
+"size": 13455
+},
+{
+"path": "core/web.py",
+"size": 6228
+},
+{
+"path": "lib/gfx.py",
+"size": 2857
+},
+{
+"path": "lib/sbc.py",
+"size": 7446
+},
+{
+"path": "lib/ssd1306.py",
+"size": 3297
+},
+{
+"path": "lib/tars.py",
+"size": 2040
+},
+{
+"path": "www/app.css.gz",
+"size": 2950
+},
+{
+"path": "www/app.js.gz",
+"size": 12590
+},
+{
+"path": "www/bridge.py",
+"size": 6262
+},
+{
+"path": "www/icon.svg.gz",
+"size": 214
+},
+{
+"path": "www/index.html.gz",
+"size": 2880
+},
+{
+"path": "www/manifest.webmanifest.gz",
+"size": 189
+},
+{
+"path": "www/fonts/IBMPlexMono-Regular.woff2",
+"size": 11760
+},
+{
+"path": "www/fonts/IBMPlexSans-Regular.woff2",
+"size": 15236
+},
+{
+"path": "www/fonts/IBMPlexSans-SemiBold.woff2",
+"size": 15992
+},
+{
+"path": "www/fonts/OFL.txt.gz",
+"size": 1990
+}
+]

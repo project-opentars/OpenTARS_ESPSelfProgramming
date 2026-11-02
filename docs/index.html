@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>openTARS Self-Programming</title>
+<meta name="description" content="Flash openTARS Self-Programming to an ESP32-S3 from your browser, and see what is planned for openTARS Pi and Gargantua Pi.">
+<meta name="color-scheme" content="dark">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="site.css?v=1">
+<script type="module" src="vendor/esp-web-tools/install-button.js"></script>
+</head>
+<body>
+<a class="skip" href="#flash">Skip to the flasher</a>
+
+<header class="top">
+  <a class="brand" href="./"><img src="icon.svg" alt="" width="32" height="32"> openTARS <span>Self-Programming</span></a>
+  <nav aria-label="Sections">
+    <a href="#flash">Flash</a>
+    <a href="#linux">Linux boards</a>
+    <a href="#pi">openTARS Pi</a>
+    <a href="https://github.com/project-opentars/OpenTARS_ESPSelfProgramming">GitHub</a>
+  </nav>
+</header>
+
+<main>
+  <section class="hero">
+    <h1>Ask from your phone.<br>Your board writes its own code.</h1>
+    <p class="lead">Open the board's page and say "make the LED breathe". A small bridge on your computer hands the request to the AI program you already use (Claude Code, Codex, OpenCode, Pi, Grok Build), which writes MicroPython, runs it on the board, reads the errors and fixes them. No API keys and no model settings.</p>
+    <div class="actions">
+      <a class="btn primary" href="#flash">Flash an ESP32-S3</a>
+      <a class="btn" href="https://github.com/project-opentars/OpenTARS_ESPSelfProgramming">Source code</a>
+    </div>
+  </section>
+
+  <section class="how" aria-label="How it works">
+    <ol class="flow">
+      <li><b>Phone</b><span>You chat on the board's web page.</span></li>
+      <li><b>Bridge</b><span>One Python file on your computer, no dependencies.</span></li>
+      <li><b>AI program</b><span>The one you already have installed and logged in.</span></li>
+      <li><b>Board</b><span>Runs the code, keeps reusable modules and notes.</span></li>
+    </ol>
+  </section>
+
+  <section id="flash" class="panel">
+    <h2>Web flasher</h2>
+    <p>Two steps, in Chrome or Edge on a computer, with the board plugged in by USB. Nothing is installed on your computer.</p>
+
+    <div class="no-serial warnbox" hidden>
+      <p><b>This browser cannot talk to USB devices.</b> Use Chrome or Edge on Windows, macOS, Linux or ChromeOS. Phones and Firefox/Safari do not support Web Serial. You can also flash from a terminal: see the <a href="https://github.com/project-opentars/OpenTARS_ESPSelfProgramming#quick-start">quick start</a>.</p>
+    </div>
+
+    <div class="steps needs-serial">
+      <article class="step">
+        <h3><span class="n">1</span> Install MicroPython</h3>
+        <p>For <b>ESP32-S3 with octal PSRAM</b> (for example N16R8 or N8R8 modules). This <span class="amber">erases the whole board</span>.</p>
+        <esp-web-install-button manifest="flasher/manifest.json">
+          <button slot="activate" class="btn primary">Connect and install MicroPython</button>
+        </esp-web-install-button>
+        <p class="small muted">Other ESP32 boards: install MicroPython for your chip from <a href="https://micropython.org/download/">micropython.org</a>, then do step 2. If the board is not found, hold <kbd>BOOT</kbd> while plugging it in. When it finishes, close the window before step 2.</p>
+      </article>
+
+      <article class="step">
+        <h3><span class="n">2</span> Copy openTARS</h3>
+        <p>Copies the system to a board that already runs MicroPython. Run it again later to update: your settings, chats, skills and programs stay.</p>
+        <button id="copy-btn" class="btn primary">Connect and copy openTARS</button>
+        <progress id="copy-bar" max="1" value="0" hidden></progress>
+        <p id="copy-log" class="mono small" role="status" aria-live="polite"></p>
+        <div id="copy-done" class="donebox" hidden>
+          <p><span class="ok">✓</span> Done. The board restarts.</p>
+        </div>
+      </article>
+
+      <article class="step">
+        <h3><span class="n">3</span> Connect</h3>
+        <ol class="small">
+          <li>On your phone, join the open Wi-Fi <b class="mono">opentars-xxxx</b> and open <b class="mono">http://192.168.71.1</b>.</li>
+          <li>In <b>Settings &gt; Wi-Fi</b>, pick your network. The page shows the new address.</li>
+          <li>On the computer with the AI program, paste the command the page shows:</li>
+        </ol>
+        <pre class="cmd"><code>curl -fsS http://&lt;board&gt;/bridge.py -o bridge.py &amp;&amp; python3 bridge.py http://&lt;board&gt;</code></pre>
+      </article>
+    </div>
+    <p class="small muted">The page has no password: anyone on your Wi-Fi can use it. Use it on a network you trust.</p>
+  </section>
+
+  <section id="linux" class="panel">
+    <h2>Raspberry Pi, Orange Pi and other Linux boards</h2>
+    <p>No flashing needed: the same system runs in the board's own Python 3, with shell commands and GPIO through libgpiod. On the board, over SSH:</p>
+    <pre class="cmd"><code>git clone https://github.com/project-opentars/OpenTARS_ESPSelfProgramming
+cd OpenTARS_ESPSelfProgramming &amp;&amp; sbc/install.sh
+sbc/install.sh --hardware   # GPIO and I2C access, uses sudo, then reboot</code></pre>
+    <p class="small muted">Then open <span class="mono">http://&lt;board&gt;:8080</span>. Tested only on an x86 Linux PC standing in for a board; not yet on a real ARM board.</p>
+  </section>
+
+  <section id="pi" class="panel planned">
+    <p class="tag">Planned · not released</p>
+    <h2>openTARS Pi and Gargantua Pi</h2>
+    <p>Separate from Self-Programming: a lean edition of the openTARS assistant made for single-board computers, with its own small model. Nothing here is built or measured on a board yet, and there is no release date.</p>
+    <div class="cards">
+      <article>
+        <h3>openTARS Pi</h3>
+        <ul>
+          <li>For ARM64 boards with Linux (Raspberry Pi OS, Armbian, Ubuntu). Reference board: Orange Pi Zero 2W with Armbian, command line only.</li>
+          <li>Command line and an optional background service, off until you turn it on.</li>
+          <li>Installs in your home folder without sudo and removes with one command.</li>
+          <li>No windows, voice, photo editing or image generation: it says so and points to the full app.</li>
+          <li>GPIO through the Self-Programming board library. <span class="amber">Writing to a pin always asks for approval on the board.</span></li>
+          <li>Optional server for your local network: listens only on the board by default, needs a token, and approvals appear on the board itself.</li>
+        </ul>
+      </article>
+      <article>
+        <h3>Gargantua Pi</h3>
+        <ul>
+          <li>A new model smaller than Gargantua 2 Lite, in two sizes: about 400 MB and about 250 MB. The installer picks the one your board can run.</li>
+          <li>Four tools: terminal, web search (through SearXNG), remember and forget.</li>
+          <li>Short conversations in English and Portuguese. No vision.</li>
+          <li>Downloaded from Hugging Face (<a href="https://huggingface.co/OpenTARS">OpenTARS</a>) with a SHA-256 check.</li>
+          <li>When a request is too much for it, it can suggest a bigger Gargantua on your network, only if you choose.</li>
+        </ul>
+      </article>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <p>MIT license · <a href="https://github.com/project-opentars/OpenTARS_ESPSelfProgramming">GitHub</a> · <a href="https://project-opentars.github.io/OpenTARS/">openTARS</a> · MicroPython (MIT) and ESP Web Tools (Apache-2.0) are served from this site. Nothing is loaded from third parties.</p>
+</footer>
+<script src="flasher.js?v=1" type="module"></script>
+</body>
+</html>

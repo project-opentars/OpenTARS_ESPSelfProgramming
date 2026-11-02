@@ -12,6 +12,8 @@ You open the board's web page and say "make the LED breathe" or "show a spinning
 
 ## Quick start
 
+**Easiest:** flash an ESP32-S3 from Chrome or Edge at **https://project-opentars.github.io/OpenTARS_ESPSelfProgramming/** (steps 1 and 2 below in the browser, over USB). From a terminal:
+
 1. Flash MicroPython (this **erases** the board; use the image for your chip from [micropython.org](https://micropython.org/download/)): `tools/flash.sh /dev/ttyACM0`
 2. Copy the system: `pip install mpremote`, then `tools/deploy.sh /dev/ttyACM0`
 3. On your phone, join the open Wi-Fi **opentars-xxxx**, open **http://192.168.71.1**, go to **Settings > Wi-Fi**, pick your network and connect. The page shows the new address; put your phone back on your Wi-Fi and open it.

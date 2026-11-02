@@ -1,0 +1,16 @@
+{
+  "name": "MicroPython 1.29.0 for ESP32-S3 (octal PSRAM)",
+  "version": "1.29.0",
+  "new_install_prompt_erase": true,
+  "builds": [
+    {
+      "chipFamily": "ESP32-S3",
+      "parts": [
+        {
+          "path": "micropython.bin",
+          "offset": 0
+        }
+      ]
+    }
+  ]
+}
